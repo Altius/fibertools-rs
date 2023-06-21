@@ -224,7 +224,7 @@ impl FiberseqData {
             x.push_str("fiber_qual\t")
         }
         x.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             "ec",
             "rq",
             "total_AT_bp",
@@ -245,6 +245,7 @@ impl FiberseqData {
             "m6a_qual",
             "5mC",
             "ref_5mC",
+            "cpg_qual",
         ));
         x
     }
@@ -317,9 +318,12 @@ impl FiberseqData {
                 .collect();
         }
 
-        let cpg = self.base_mods.cpg_positions(false);
+        // let cpg = self.base_mods.cpg_positions(false);
+        // let cpg_count = cpg.len();
+        // let ref_cpg = self.base_mods.cpg_positions(true);
+        let (cpg, ref_cpg, cpg_qual) = self.base_mods.cpg();
         let cpg_count = cpg.len();
-        let ref_cpg = self.base_mods.cpg_positions(true);
+        let cpg_qual: Vec<i64> = cpg_qual.into_iter().map(|a| a as i64).collect();
 
         // write the features
         let mut rtn = String::with_capacity(0);
@@ -375,6 +379,7 @@ impl FiberseqData {
             &m6a_qual,
             &cpg,
             &ref_cpg,
+            &cpg_qual,
         ] {
             if vec.is_empty() {
                 rtn.push('.');

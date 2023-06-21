@@ -26,3 +26,8 @@ cargo install fibertools-rs
 cargo install --git https://github.com/mrvollger/fibertools-rs
 ```
 
+### to be able to debug in pyCharm I needed to also
+```
+cd .../libtorch/lib
+cp libtorch_cpu.dylib libtorch.dylib libc10.dylib libiomp5.dylib /usr/local/lib
+```
