@@ -6,4 +6,4 @@
 
   echo slurm node: $SLURMD_NODENAME , jobid: $SLURM_JOB_ID
   module add rust
-  python ft extract $1 -v -m 1 --m6a ./test_m6a.tsv --cpg ./test_cpg.tsv -a ./test_all.tsv -f -q -s
+  python ../target/debug/ft extract $1 -v -m 0 -a ./test_all.tsv -s
