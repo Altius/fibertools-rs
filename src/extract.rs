@@ -581,8 +581,11 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
         chunk_size,
     };
     let mut processed_reads = 0;
+    let pg_start = Instant::now();
     for chunk in bam_chunk_iter {
         process_bam_chunk(&chunk, processed_reads, &mut out_files, &head_view);
         processed_reads += chunk.len();
     }
+    let duration = pg_start.elapsed();
+    print!("Processed reads: {} in {:.2?} seconds", processed_reads, duration);
 }
