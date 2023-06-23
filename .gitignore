@@ -1,4 +1,4 @@
-/target
+**/target
 target/**
 *.code-workspace
 Cargo.lock
@@ -12,4 +12,8 @@ _site/*
 models/backups/*
 get_json.sh
 src/model
+<<<<<<< HEAD
 arc/**
+=======
+.devcontainer/**
+>>>>>>> 44016a72c1dbbbff212ef206b7594319d053320d
