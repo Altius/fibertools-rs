@@ -587,5 +587,5 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
         processed_reads += chunk.len();
     }
     let duration = pg_start.elapsed().as_secs_f64() / 60.0;
-    print!("Processed reads: {} in {:.2?} minutes", processed_reads, duration);
+    println!("Processed reads: {} in {:.2?} minutes", processed_reads, duration);
 }
