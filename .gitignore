@@ -12,8 +12,6 @@ _site/*
 models/backups/*
 get_json.sh
 src/model
-<<<<<<< HEAD
 arc/**
-=======
+data/**
 .devcontainer/**
->>>>>>> 44016a72c1dbbbff212ef206b7594319d053320d

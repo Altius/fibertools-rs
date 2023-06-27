@@ -1,5 +1,6 @@
 use super::basemods::BaseMods;
 use super::*;
+use bio::io::fasta;
 use bamlift::*;
 use colored::Colorize;
 use rayon::{current_num_threads, prelude::*};
@@ -572,6 +573,21 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
         }
         None => {}
     }
+
+    // let filename = "data/hg38/hg38.fa";
+    // let reader = fasta::Reader::from_file(filename).expect("Unable to open");
+    // let mut nb_reads = 0;
+    // let mut nb_bases = 0;
+    // for result in reader.records() {
+    //     let record = result.expect("Error during fasta record parsing");
+    //     println!("{}", record.id());
+    //
+    //     nb_reads += 1;
+    //     nb_bases += record.seq().len();
+    // }
+    //
+    // println!("Number of reads: {}", nb_reads);
+    // println!("Number of bases: {}", nb_bases);
 
     // process bam in chunks
     // keeps mem pretty low, about 1GB per thread
