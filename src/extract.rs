@@ -1,6 +1,5 @@
 use super::basemods::BaseMods;
 use super::*;
-use bio::io::fasta;
 use bamlift::*;
 use colored::Colorize;
 use rayon::{current_num_threads, prelude::*};
@@ -575,7 +574,7 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
     }
 
     // let filename = "data/hg38/hg38.fa";
-    // let reader = fasta::Reader::from_file(filename).expect("Unable to open");
+    // let reader = bio::io::fasta::Reader::from_file(filename).expect("Unable to open");
     // let mut nb_reads = 0;
     // let mut nb_bases = 0;
     // for result in reader.records() {
