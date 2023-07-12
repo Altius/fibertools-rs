@@ -1,4 +1,5 @@
 use anyhow::{bail, Error, Ok, Result};
+use bio_io::*;
 use colored::Colorize;
 use env_logger::{Builder, Target};
 use fibertools_rs::cli::Commands;
@@ -70,6 +71,7 @@ pub fn main() -> Result<(), Error> {
         Some(Commands::Extract {
             bam,
             reference,
+            molecular: _molecular,
             simplify,
             quality,
             min_ml_score,
@@ -81,7 +83,6 @@ pub fn main() -> Result<(), Error> {
             full_float,
             region
         }) => {
-            // read in the bam from stdin or from a file
             let out_files = FiberOut::new(
                 m6a,
                 cpg,
@@ -99,7 +100,8 @@ pub fn main() -> Result<(), Error> {
                 let mut bam = bam::IndexedReader::from_path(bam)?;
                 extract::extract_contained_region(&mut bam, out_files);
             } else {
-                let mut bam = bam::Reader::from_path(bam)?;
+            // read in the bam from stdin or from a file
+                let mut bam = bam_reader(bam, args.threads);
                 extract::extract_contained(&mut bam, out_files);
             }
 
@@ -148,9 +150,9 @@ pub fn main() -> Result<(), Error> {
             // cnn must be set to true if using semi
             let cnn = if *semi { &true } else { cnn };
             // read bam
-            let mut bam = fibertools_rs::bam_reader(bam, args.threads);
+            let mut bam = bam_reader(bam, args.threads);
             let header = bam::Header::from_template(bam.header());
-            let mut out = fibertools_rs::bam_writer(out, &bam, args.threads);
+            let mut out = bam_writer(out, &bam, args.threads);
             // set up options
             let nuc_opts = fibertools_rs::nucleosomes::NucleosomeOptions {
                 nucleosome_length: *nucleosome_length,
@@ -175,13 +177,13 @@ pub fn main() -> Result<(), Error> {
             predict_m6a::read_bam_into_fiberdata(&mut bam, &mut out, &predict_options);
         }
         Some(Commands::ClearKinetics { bam, out }) => {
-            let mut bam = fibertools_rs::bam_reader(bam, args.threads);
-            let mut out = fibertools_rs::bam_writer(out, &bam, args.threads);
+            let mut bam = bam_reader(bam, args.threads);
+            let mut out = bam_writer(out, &bam, args.threads);
             fibertools_rs::clear_kinetics(&mut bam, &mut out);
         }
         Some(Commands::StripBasemods { bam, out, basemod }) => {
-            let mut bam = fibertools_rs::bam_reader(bam, args.threads);
-            let mut out = fibertools_rs::bam_writer(out, &bam, args.threads);
+            let mut bam = bam_reader(bam, args.threads);
+            let mut out = bam_writer(out, &bam, args.threads);
             fibertools_rs::strip_basemods::strip_base_mods(&mut bam, &mut out, basemod);
         }
         Some(Commands::AddNucleosomes {
@@ -193,8 +195,8 @@ pub fn main() -> Result<(), Error> {
             distance_from_end,
             allowed_m6a_skips,
         }) => {
-            let mut bam = fibertools_rs::bam_reader(bam, args.threads);
-            let mut out = fibertools_rs::bam_writer(out, &bam, args.threads);
+            let mut bam = bam_reader(bam, args.threads);
+            let mut out = bam_writer(out, &bam, args.threads);
             fibertools_rs::nucleosomes::add_nucleosomes_to_bam(
                 &mut bam,
                 &mut out,

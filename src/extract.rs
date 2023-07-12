@@ -1,6 +1,7 @@
 use super::basemods::BaseMods;
 use super::*;
 use bamlift::*;
+use bio_io::*;
 use colored::Colorize;
 use rayon::{current_num_threads, prelude::*};
 use rust_htslib::{
@@ -605,13 +606,12 @@ pub fn extract_contained_region(bam: &mut bam::IndexedReader, mut out_files: Fib
         None => {}
     }
 
-    let pg_start = Instant::now();
     // let mut range = out_files.region;
-    bam.fetch((&(out_files.region))).expect("Failed to fetch region");
+    bam.fetch(&(out_files.region)).expect("Failed to fetch region");
     let records: Vec<bam::Record> = bam.records().map(|r| r.unwrap()).collect();
     println!("  region {} produced {} records", out_files.region, records.len());
 
-    let mut processed_reads = 0;
+    let processed_reads = 0;
     let pg_start = Instant::now();
     process_bam_chunk(&records, processed_reads, &mut out_files, &head_view);
     let duration = pg_start.elapsed().as_secs_f64() / 60.0;
