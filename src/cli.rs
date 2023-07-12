@@ -187,9 +187,14 @@ pub enum Commands {
         /// Output path for nucleosome bed12
         #[clap(short, long)]
         nuc: Option<String>,
-        /// Output path for a tabular format including "all" fiberseq information in the bam
+        /// Domain to limit for fiberseq
         #[clap(short, long)]
         all: Option<String>,
+
+        /// Output path for a tabular format including "all" fiberseq information in the bam
+        #[clap(long, default_value = "")]
+        region: String,
+
         /// Include per base quality scores in "fiber_qual"
         #[clap(short, long, help_heading = "All-Format-Options")]
         quality: bool,

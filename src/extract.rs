@@ -573,23 +573,6 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
         None => {}
     }
 
-    // let filename = "data/hg38/hg38.fa";
-    // let reader = bio::io::fasta::Reader::from_file(filename).expect("Unable to open");
-    // let mut nb_reads = 0;
-    // let mut nb_bases = 0;
-    // for result in reader.records() {
-    //     let record = result.expect("Error during fasta record parsing");
-    //     println!("{}", record.id());
-    //
-    //     nb_reads += 1;
-    //     nb_bases += record.seq().len();
-    // }
-    //
-    // println!("Number of reads: {}", nb_reads);
-    // println!("Number of bases: {}", nb_bases);
-
-    // process bam in chunks
-    // keeps mem pretty low, about 1GB per thread
     let chunk_size = current_num_threads() * 500;
     let bam_chunk_iter = BamChunk {
         bam: bam.records(),
@@ -603,4 +586,34 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
     }
     let duration = pg_start.elapsed().as_secs_f64() / 60.0;
     println!("Processed reads: {} in {:.2?} minutes", processed_reads, duration);
+}
+
+pub fn extract_contained_region(bam: &mut bam::IndexedReader, mut out_files: FiberOut) {
+    let header = bam::Header::from_template(bam.header());
+    let head_view = bam::HeaderView::from_header(&header);
+
+    // print the header if in all mode
+    match &mut out_files.all {
+        Some(all) => {
+            write!(
+                all,
+                "{}",
+                FiberseqData::all_header(out_files.simplify, out_files.quality)
+            )
+            .unwrap();
+        }
+        None => {}
+    }
+
+    let pg_start = Instant::now();
+    // let mut range = out_files.region;
+    bam.fetch((&(out_files.region))).expect("Failed to fetch region");
+    let records: Vec<bam::Record> = bam.records().map(|r| r.unwrap()).collect();
+    println!("  region {} produced {} records", out_files.region, records.len());
+
+    let mut processed_reads = 0;
+    let pg_start = Instant::now();
+    process_bam_chunk(&records, processed_reads, &mut out_files, &head_view);
+    let duration = pg_start.elapsed().as_secs_f64() / 60.0;
+    println!("Processed in {:.2?} minutes", duration);
 }

@@ -79,9 +79,9 @@ pub fn main() -> Result<(), Error> {
             nuc,
             all,
             full_float,
+            region
         }) => {
             // read in the bam from stdin or from a file
-            let mut bam = fibertools_rs::bam_reader(bam, args.threads);
             let out_files = FiberOut::new(
                 m6a,
                 cpg,
@@ -93,8 +93,16 @@ pub fn main() -> Result<(), Error> {
                 *quality,
                 *min_ml_score,
                 *full_float,
+                region.to_string()
             )?;
-            extract::extract_contained(&mut bam, out_files);
+            if region.len() > 0 {
+                let mut bam = bam::IndexedReader::from_path(bam)?;
+                extract::extract_contained_region(&mut bam, out_files);
+            } else {
+                let mut bam = bam::Reader::from_path(bam)?;
+                extract::extract_contained(&mut bam, out_files);
+            }
+
         }
         Some(Commands::Center {
             bam,
@@ -251,7 +259,7 @@ Please download libtorch v1.13.0 from https://pytorch.org/get-started/ and extra
 
 On a linux system you can download:
     wget https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.13.0%2Bcu116.zip
-    
+
 Then add the following to your .bashrc or equivalent:
     export LIBTORCH=/path/to/libtorch
     export LD_LIBRARY_PATH=${{LIBTORCH}}/lib:$LD_LIBRARY_PATH
