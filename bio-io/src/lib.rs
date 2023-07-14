@@ -44,17 +44,21 @@ fn get_output(path: Option<PathBuf>) -> Result<Box<dyn Write + Send + 'static>> 
 /// Uses the presence of a `.gz` extension to decide
 // Attempting to have a file writer too
 pub fn writer(filename: &str) -> Result<Box<dyn Write>> {
-    let ext = Path::new(filename).extension();
-    let path = PathBuf::from(filename);
-    let buffer = get_output(Some(path))?;
-    if ext == Some(OsStr::new("gz")) {
-        let writer = ZBuilder::<Bgzf, _>::new()
-            .num_threads(COMPRESSION_THREADS)
-            .compression_level(Compression::new(COMPRESSION_LEVEL))
-            .from_writer(buffer);
-        Ok(Box::new(writer))
+    if filename == "stdout" {
+        Ok(Box::new(std::io::stdout()) as Box<dyn Write>)
     } else {
-        Ok(buffer)
+        let ext = Path::new(filename).extension();
+        let path = PathBuf::from(filename);
+        let buffer = get_output(Some(path))?;
+        if ext == Some(OsStr::new("gz")) {
+            let writer = ZBuilder::<Bgzf, _>::new()
+                .num_threads(COMPRESSION_THREADS)
+                .compression_level(Compression::new(COMPRESSION_LEVEL))
+                .from_writer(buffer);
+            Ok(Box::new(writer))
+        } else {
+            Ok(buffer)
+        }
     }
 }
 

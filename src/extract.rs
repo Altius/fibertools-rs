@@ -580,13 +580,10 @@ pub fn extract_contained(bam: &mut bam::Reader, mut out_files: FiberOut) {
         chunk_size,
     };
     let mut processed_reads = 0;
-    let pg_start = Instant::now();
     for chunk in bam_chunk_iter {
         process_bam_chunk(&chunk, processed_reads, &mut out_files, &head_view);
         processed_reads += chunk.len();
     }
-    let duration = pg_start.elapsed().as_secs_f64() / 60.0;
-    println!("Processed reads: {} in {:.2?} minutes", processed_reads, duration);
 }
 
 pub fn extract_contained_region(bam: &mut bam::IndexedReader, mut out_files: FiberOut) {
@@ -606,13 +603,8 @@ pub fn extract_contained_region(bam: &mut bam::IndexedReader, mut out_files: Fib
         None => {}
     }
 
-    let pg_start = Instant::now();
     bam.fetch(&(out_files.region)).expect("Failed to fetch region");
     let records: Vec<bam::Record> = bam.records().map(|r| r.unwrap()).collect();
-    println!("  region {} produced {} records", out_files.region, records.len());
-
     let processed_reads = 0;
     process_bam_chunk(&records, processed_reads, &mut out_files, &head_view);
-    let duration = pg_start.elapsed().as_secs_f64() / 60.0;
-    println!("Processed in {:.2?} minutes", duration);
 }

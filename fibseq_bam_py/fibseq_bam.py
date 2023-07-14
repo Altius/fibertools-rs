@@ -4,6 +4,8 @@
 import sys
 from os import path, makedirs
 from timeit import default_timer as timer
+from random import randint
+import subprocess
 
 import pysam
 import numpy as np
@@ -11,39 +13,45 @@ import numpy as np
 from bisect import bisect_left
 
 
-bam_file = None
+input_file = None
 region = None
 outputFolder = './output'
 fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
 # fa_file = '/home/ehaugen/refseq/hg38/hg38.fa'
 
-# bam_file = '/net/seq/data2/projects/Palladium_Dataset/stream/alld2rest.rerun.nokinetics.rg.bam.allchr.dipcall.haplotagged.HAP1.bam'
+# input_file = '/net/seq/data2/projects/Palladium_Dataset/stream/alld2rest.rerun.nokinetics.rg.bam.allchr.dipcall.haplotagged.HAP1.bam'
 # region = 'chrX:0-45000000'
 
-# bam_file = '/Volumes/photo2/fiberseq_data/chr21_chr22_resdir_bed.aligned.m6a.bam'
+# input_file = '/net/seq/data2/projects/ehaugen/fiberseq/2023mar08/indexed_bed/m6A.D2.rest.hg38.bed.gz'
+# region = 'chrX:49200000-49300000'
+
+# input_file = '/Volumes/photo2/fiberseq_data/chr21_chr22_resdir_bed.aligned.m6a.bed.gz'
+# input_file = '/Volumes/photo2/fiberseq_data/chr21_chr22_resdir_bed.aligned.m6a.bam'
 # region = 'chr21:0-45000000'
-# bam_file = '/Volumes/photo2/fiberseq_data/chrX_10Mbp_resdir_bed.aligned.m6a.bam'
+# input_file = '/Volumes/photo2/fiberseq_data/chrX_10Mbp_resdir_bed.aligned.m6a.bed.gz'
+# input_file = '/Volumes/photo2/fiberseq_data/chrX_10Mbp_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:40000000-50000000'
-bam_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
+# input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bed.gz'
+input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
 region = 'chrX:49200000-49300000'
+# region = 'chrX:49202000-49203000'
 
 
 def fibseq_bam():
 
-    global bam_file, region, outputFolder, fa_file
+    global input_file, region, outputFolder, fa_file
 
     if len(sys.argv) < 3:
-        print('Usage:\t{} input_file.bed region [-o output_folder] [-f fa_file]'.format(path.basename(sys.argv[0])))
+        print('Usage:\t{} input_file region [-o output_folder] [-f fa_file]'.format(path.basename(sys.argv[0])))
+        print('      \t input file can be indexed .bed.gz or indexed .bam')
         exit(0)
 
-    if not bam_file:
-        bed_file = sys.argv[1]
+    if not input_file:
+        input_file = sys.argv[1]
     if not region:
         region = sys.argv[2]
     if '-o' in sys.argv:
         outputFolder = sys.argv[sys.argv.index('-o') + 1]
-    if '-f' in sys.argv:
-        fa_file = sys.argv[sys.argv.index('-f') + 1]
 
     start = timer()
 
@@ -73,31 +81,35 @@ def fibseq_bam():
 
     hashes = []
 
-    samfile = pysam.AlignmentFile(bam_file, "rb")
-    records = samfile.fetch(region=region1)
-    # print(sum(1 for _ in records))
+    records = []
+    ext = path.splitext(input_file)[1]
+    if ext not in ['.bam', '.gz']:
+        print('Invalid input file')
+        exit(-1)
+    if ext == '.bam':
+        command_line = ['extract', '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam', '--m6a', 'stdout', '-r']
+        result = subprocess.run(['../target/debug/ft'] + command_line, stdout=subprocess.PIPE)
+        records = result.stdout.decode('utf-8').split('\n')
+        records = [x.split('\t') for x in records[:-1]]
+    else:
+        if not path.exists(input_file + '.tbi'):
+            base_bed_file = path.splitext(input_file)[0]
+            pysam.tabix_index(base_bed_file, preset='bed')
+        tbx = pysam.TabixFile(input_file)
+        records = tbx.fetch(region1, parser=pysam.asTuple())
     tot = 0
     for cnt, record in enumerate(records):
         tot = cnt + 1
+        line = record
         # _chrom, chromStart, chromEnd, name, coverage, strand, thickStart, thickEnd, itemRgb, blockCount, blockSizes, blockStarts = record
-        # _, chromStart, chromEnd, name, _, _, _, _, _, _, _, blockStarts = record
+        _, chromStart, chromEnd, name, _, _, _, _, _, _, _, blockStarts = record
         # Not relative locations, just literally keep track of every base
         # and remember to ignore the end two positions of the fiber record
-        # starts = blockStarts.split(',')[1:-1]
-        chromStart = record.reference_start
-        chromEnd = record.reference_end
-        name = record.query_name
-        keys = [x for x in record.modified_bases.keys() if 'a' in x]
-        blockStarts = []
-        for key in keys:
-            blockStarts += [x+1 for x, v in record.modified_bases[key]]
-        starts = sorted(blockStarts)
-        line = [record.reference_name, chromStart, chromEnd, name]
+        starts = blockStarts.split(',')[1:-1]
 
         if not starts:
             continue
         hash_m6A = dict([(int(k), 1) for k in starts])
-        # my %hash_m6A = map { $_ => 1 } @starts;
 
         chromStart, chromEnd = [int(x) for x in [chromStart, chromEnd]]
         # mappedLength = chromEnd - chromStart
@@ -107,7 +119,6 @@ def fibseq_bam():
         # for refBase0 in refBasesAT:
         idx0 = bisect_left(refBasesAT, chromStart + 2)
         idx1 = bisect_left(refBasesAT, chromEnd - 1)
-        # TODO - make start and end the first and last refbase0
         for refBase0 in refBasesAT[idx0:idx1]:
             # Ignoring the BED12 end positions that aren't considered in the track
             if refBase0 > chromStart + 1 and refBase0 < chromEnd - 1:
@@ -117,7 +128,7 @@ def fibseq_bam():
             else:
                 # Will include with NA's for missing extent
                 # out of range for this molecule, incomplete overlap
-                print('here')
+                print('should not get here')
                 sort_vector.append(float('nan'))
         # print(sort_vector)
 
@@ -132,6 +143,8 @@ def fibseq_bam():
             'vector': sort_vector,
             'start': chromStart,
             'end': chromEnd,
+            'idx0': idx0,
+            'idx1': idx1,
             'inputorder': cnt + 1,
             'meanmeth': mean
         }
@@ -161,13 +174,13 @@ def fibseq_bam():
     methsorted = sorted(hashes, key=lambda x: x.get('meanmeth'), reverse=True)
     for hashref in methsorted:
         # print(hashref['meanmeth'])
-        out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line']])))
-
+        out_sorted.write('{}\n'.format('\t'.join(hashref['line'])))
         if compact_output:
-            out_matrix.write('{}\t{}\t{}\t{}\n'.format(hashref['name'], hashref['start'], hashref['end'],
-                                                       ''.join(['1' if x else '-' for x in hashref['vector']])))
+            full_line = ['_'] * len(refBasesAT)
+            full_line[hashref['idx0']:hashref['idx1']] = ['o' if not x else str(randint(1,9)) for x in hashref['vector']]
+            out_matrix.write('{}\t{}\t{}\t{}\n'.format(hashref['name'], hashref['start'], hashref['end'], ''.join(full_line)))
         else:
-            full_line = [''] * len(refBasesAT)
+            full_line = [float('nan')] * len(refBasesAT)
             full_line[idx0:idx1] = hashref['vector']
             out_matrix.write('{}\t{}\n'.format(hashref['name'], '\t'.join([str(x) for x in full_line])))
 
