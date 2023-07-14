@@ -33,8 +33,8 @@ fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
 # region = 'chrX:40000000-50000000'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bed.gz'
 input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
-region = 'chrX:49200000-49300000'
-# region = 'chrX:49202000-49203000'
+# region = 'chrX:49200000-49300000'
+region = 'chrX:49202000-49203000'
 
 
 def fibseq_bam():
@@ -177,7 +177,7 @@ def fibseq_bam():
         out_sorted.write('{}\n'.format('\t'.join(hashref['line'])))
         if compact_output:
             full_line = ['_'] * len(refBasesAT)
-            full_line[hashref['idx0']:hashref['idx1']] = ['o' if not x else str(randint(1,9)) for x in hashref['vector']]
+            full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else str(randint(1,9)) for x in hashref['vector']]
             out_matrix.write('{}\t{}\t{}\t{}\n'.format(hashref['name'], hashref['start'], hashref['end'], ''.join(full_line)))
         else:
             full_line = [float('nan')] * len(refBasesAT)
