@@ -115,13 +115,19 @@ def fibseq_bam():
 
     # Mark the A's and T's that could get m6A calls
     refBasesAT = []
-    refBases_string = []
     for i in range(expectedReferenceLength):
-        if referenceString[i].upper() in ['A', 'T']:  # cpg change to ['C', 'G']:
+        if referenceString[i].upper() in ['A', 'T']:
             refBasesAT.append(highlightMin0 + i)
-            refBases_string.append(referenceString[i].upper())
     countATsInRange = len(refBasesAT)
-    print(countATsInRange)
+    print('AT count:{}'.format(countATsInRange))
+
+    # Mark the C's and G's that could get m6A calls
+    refBasesCG = []
+    for i in range(expectedReferenceLength):
+        if referenceString[i].upper() in ['C', 'G']:
+            refBasesCG.append(highlightMin0 + i)
+    countCGsInRange = len(refBasesAT)
+    print('AT count:{}'.format(countCGsInRange))
 
     hashes = []
 
@@ -154,30 +160,61 @@ def fibseq_bam():
         chromStart = record.reference_start
         chromEnd = record.reference_end
         name = record.query_name
+
+        line = [record.reference_name, chromStart, chromEnd, name]
+
+        def get_tag(code):
+            try:
+                return record.tags[[x[0] for x in record.tags].index(code)][1]
+            except:
+                return None
+
+        nuc_starts = list(get_tag('ns'))
+        nuc_lengths = list(get_tag('nl'))
+        msp_starts = list(get_tag('as'))
+        msp_lengths = list(get_tag('al'))
+        seq_len = record.qlen
+        if record.is_reverse:
+            nuc_ends = [x + nuc_lengths[n] for n, x in enumerate(nuc_starts)]
+            nuc_starts = [seq_len - x - 1 for x in reversed(nuc_ends)]
+            nuc_lengths.reverse()
+            msp_ends = [x + msp_lengths[n] for n, x in enumerate(msp_starts)]
+            msp_starts = [seq_len - x - 1 for x in reversed(msp_ends)]
+            msp_lengths.reverse()
+
+        seg_len = highlightMax1 - highlightMin0
+        disp_string = [' '] * seg_len
+        start = max(0, chromStart - highlightMin0)
+        end = min(seg_len, chromEnd - highlightMin0)
+        disp_string[start: end] = ['.'] * (end - start)
+
+        disp_nuc = disp_string[:]
+        for n, x in enumerate(nuc_starts):
+            start = chromStart - highlightMin0 + x
+            end = min(seg_len, start + nuc_lengths[n])
+            start = max(0, start)
+            if start < seg_len and end > 0:
+                disp_nuc[start: end] = ['-'] * (end - start)
+
+        disp_msp = disp_string[:]
+        for n, x in enumerate(msp_starts):
+            start = chromStart - highlightMin0 + x
+            end = min(seg_len, start + msp_lengths[n])
+            start = max(0, start)
+            if start < seg_len and end > 0:
+                disp_msp[start: end] = ['+'] * (end - start)
+
         keys = [x for x in record.modified_bases.keys() if 'a' in x]  # cpg change to 'm'
         base_starts = []
         for key in keys:
             base_starts += [{'q_pos': x, 'qual': v} for x, v in record.modified_bases[key]]
         sorted_starts = sorted(base_starts, key=lambda x: x['q_pos'])
         starts = realign_pos(record.aligned_pairs, sorted_starts)
-        line = [record.reference_name, chromStart, chromEnd, name]
-
-        # nuc_starts = record.tags[[x[0] for x in record.tags].index("ns")][1]
-        # nuc_lengths = record.tags[[x[0] for x in record.tags].index("nl")][1]
-        # msp_starts = record.tags[[x[0] for x in record.tags].index("as")][1]
-        # msp_lengths = record.tags[[x[0] for x in record.tags].index("al")][1]
-
-        if not starts:
-            continue
-
         hash_m6A = dict([(x['r_pos'] - chromStart, x['qual']) for x in starts])
-
-        chromStart, chromEnd = [int(x) for x in [chromStart, chromEnd]]
-        # mappedLength = chromEnd - chromStart
-        # print(chrom, chromStart, mappedLength)
 
         sort_vector = []
         qual_vector = []
+        disp_m6a = disp_string[:]
         idx0 = bisect_left(refBasesAT, chromStart + 2)
         idx1 = bisect_left(refBasesAT, chromEnd - 1)
         for refBase0 in refBasesAT[idx0:idx1]:
@@ -188,25 +225,54 @@ def fibseq_bam():
                 if offset in hash_m6A:  # methylated
                     sort_vector.append(1.0)
                     qual_vector.append(hash_m6A[offset])
+                    disp_m6a[refBase0 - highlightMin0] = str(hash_m6A[offset] // 26)
                 else:
                     sort_vector.append(0.0)
                     qual_vector.append(-1)
+                    disp_m6a[refBase0 - highlightMin0] = 'o'
             else:
                 # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                 print('should not get here')
                 sort_vector.append(float('nan'))
-        # print(sort_vector)
 
         # Skip this if no A/T bases in range
         if not len(sort_vector):
             continue
+
+        keys = [x for x in record.modified_bases.keys() if 'm' in x]  # cpg change to 'm'
+        base_starts = []
+        for key in keys:
+            base_starts += [{'q_pos': x, 'qual': v} for x, v in record.modified_bases[key]]
+        sorted_starts = sorted(base_starts, key=lambda x: x['q_pos'])
+        starts = realign_pos(record.aligned_pairs, sorted_starts)
+        hash_cpg = dict([(x['r_pos'] - chromStart, x['qual']) for x in starts])
+
+        disp_cpg = disp_string[:]
+        idx0 = bisect_left(refBasesCG, chromStart + 2)
+        idx1 = bisect_left(refBasesCG, chromEnd - 1)
+        for refBase0 in refBasesCG[idx0:idx1]:
+        # for refBase0 in refBasesCG:
+            # double check that ignoring the BED12 end positions that aren't considered in the track
+            if refBase0 > chromStart + 1 and refBase0 < chromEnd - 1:
+                offset = refBase0 - chromStart
+                if offset in hash_cpg:  # methylated
+                    disp_cpg[refBase0 - highlightMin0] = str(hash_cpg[offset] // 26)
+                else:
+                    disp_cpg[refBase0 - highlightMin0] = 'o'
+            else:
+                # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
+                print('should not get here')
 
         mean = np.nanmean(sort_vector)
         hash = {
             'chrom': chrom,
             'name': name,
             'line': line,
-            'vector': qual_vector,
+            'vector': sort_vector,
+            'disp_m6a': ''.join(disp_m6a),
+            'disp_cpg': ''.join(disp_cpg),
+            'disp_nuc': ''.join(disp_nuc),
+            'disp_msp': ''.join(disp_msp),
             'start': chromStart,
             'end': chromEnd,
             'idx0': idx0,
@@ -228,7 +294,7 @@ def fibseq_bam():
     fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}_{}.tsv'.format(type, chromosome, highlightMin0, highlightMax1))
     out_matrix = open(fileMatrix, 'w')
     if compact_output:
-        matrixHeader = '\t'.join(['chrom', 'start', 'end', 'ID', ''.join(refBases_string)]) + '\n'
+        matrixHeader = '\t'.join(['ID', 'chrom', 'start', 'end', referenceString]) + '\n'
     else:
         matrixHeader = '\t'.join(['ID'] + [str(x) for x in refBasesAT]) + '\n'
     out_matrix.write(matrixHeader)
@@ -242,13 +308,18 @@ def fibseq_bam():
     for hashref in methsorted:
         # print(hashref['meanmeth'])
         out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line']])))
+
         if compact_output:
-            full_line = ['_'] * len(refBasesAT)
+            # full_line = ['_'] * len(refBasesAT)
             # full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else '1' for x in hashref['vector']]
-            full_line[hashref['idx0']:hashref['idx1']] = ['.' if x < 0 else str(x // 26) for x in hashref['vector']]
+            # full_line[hashref['idx0']:hashref['idx1']] = ['o' if x < 0 else str(x // 26) for x in hashref['vector']]
+            # disp_string = ''.join(full_line)
             out_matrix.write(
-                '{}\t{}\t{}\t{}\t{}\n'.format(hashref['chrom'], hashref['start'], hashref['end'], hashref['name'],
-                                              ''.join(full_line)))
+                '{}\t{}\t{}\t{}\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'],
+                                              hashref['disp_m6a']))
+            out_matrix.write('\t\t\t\t{}\n'.format(hashref['disp_cpg']))
+            out_matrix.write('\t\t\t\t{}\n'.format(hashref['disp_nuc']))
+            out_matrix.write('\t\t\t\t{}\n'.format(hashref['disp_msp']))
         else:
             full_line = [float('nan')] * len(refBasesAT)
             full_line[idx0:idx1] = hashref['vector']

@@ -170,7 +170,7 @@ pub enum Commands {
         #[arg(default_value = "-", value_hint = ValueHint::AnyPath)]
         bam: String,
         /// Report in reference sequence coordinates
-        #[clap(short, long, default_value = "true",
+        #[clap(short, long, default_value = "false",
             default_value_ifs([
                 ("molecular", "true", "false"),
                 ("molecular", "false", "true"),
