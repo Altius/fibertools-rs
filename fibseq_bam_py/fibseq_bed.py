@@ -117,7 +117,7 @@ def fibseq_bam():
     refBasesAT = []
     refBases_string = []
     for i in range(expectedReferenceLength):
-        if referenceString[i].upper() in ['A', 'T']:
+        if referenceString[i].upper() in ['A', 'T']:  # cpg change to ['C', 'G']:
             refBasesAT.append(highlightMin0 + i)
             refBases_string.append(referenceString[i].upper())
     countATsInRange = len(refBasesAT)
@@ -154,13 +154,18 @@ def fibseq_bam():
         chromStart = record.reference_start
         chromEnd = record.reference_end
         name = record.query_name
-        keys = [x for x in record.modified_bases.keys() if 'a' in x]
+        keys = [x for x in record.modified_bases.keys() if 'a' in x]  # cpg change to 'm'
         base_starts = []
         for key in keys:
             base_starts += [{'q_pos': x, 'qual': v} for x, v in record.modified_bases[key]]
         sorted_starts = sorted(base_starts, key=lambda x: x['q_pos'])
         starts = realign_pos(record.aligned_pairs, sorted_starts)
         line = [record.reference_name, chromStart, chromEnd, name]
+
+        # nuc_starts = record.tags[[x[0] for x in record.tags].index("ns")][1]
+        # nuc_lengths = record.tags[[x[0] for x in record.tags].index("nl")][1]
+        # msp_starts = record.tags[[x[0] for x in record.tags].index("as")][1]
+        # msp_lengths = record.tags[[x[0] for x in record.tags].index("al")][1]
 
         if not starts:
             continue
@@ -219,7 +224,8 @@ def fibseq_bam():
     compact_output = '-c' in sys.argv
 
     # Matrix of the m6A statuses within excerpt region
-    fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
+    type = 'm6a'  # cpg change to 'cpg'
+    fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}_{}.tsv'.format(type, chromosome, highlightMin0, highlightMax1))
     out_matrix = open(fileMatrix, 'w')
     if compact_output:
         matrixHeader = '\t'.join(['chrom', 'start', 'end', 'ID', ''.join(refBases_string)]) + '\n'
