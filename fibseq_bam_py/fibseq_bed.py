@@ -4,13 +4,12 @@
 import sys
 from os import path, makedirs
 from timeit import default_timer as timer
-from random import randint
-import subprocess
 
 import pysam
 import numpy as np
 # import decode_m6A_events
 from bisect import bisect_left
+import re
 
 
 input_file = None
@@ -37,8 +36,51 @@ input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.ba
 region = 'chrX:49202000-49203000'
 
 
-def fibseq_bam():
+def cigar2end(left, cigar):
+    """Return right-most position of aligned read."""
+    # store info about each CIGAR category
+    cigar_pat = re.compile(r"\d+[MIDNSHP=X]{1}")
+    counts = {"M": 0,  # M 0 alignment match (can be a sequence match or mismatch)
+              'I': 0,  # I 1 insertion to the reference
+              'D': 0,  # D 2 deletion from the reference
+              'N': 0,  # N 3 skipped region from the reference
+              'S': 0,  # S 4 soft clipping (clipped sequences present in SEQ)
+              'H': 0,  # H 5 hard clipping (clipped sequences NOT present in SEQ)
+              'P': 0,  # P 6 padding (silent deletion from padded reference)
+              '=': 0,  # = 7 sequence match
+              'X': 0,  # X 8 sequence mismatch
+              }
+    # split cigar entries
+    for centry in cigar_pat.findall(cigar):
+        ccount = int(centry[:-1])
+        csymbol = centry[-1]
+        counts[csymbol] = ccount
+    # get number of aligned 'reference' bases
+    aligned = counts["M"] + counts["D"] + counts["N"]  # + counts["="] + counts["X"]
+    right = left + aligned
+    return right
 
+
+def realign_pos(aligned_pairs, pos_dicts):
+    # find the shared positions in the reference
+    ret = []
+    cur_pos = 0
+    for q_pos, r_pos in aligned_pairs:
+        val_to_match = q_pos
+        if val_to_match is None:
+            continue
+        # iterate over positions until we find the exact position or move past it
+        while cur_pos < len(pos_dicts) and pos_dicts[cur_pos]['q_pos'] <= val_to_match:
+            if pos_dicts[cur_pos]['q_pos'] == val_to_match and r_pos:
+                ret_dict = {'q_pos': q_pos, 'r_pos': r_pos, 'qual': pos_dicts[cur_pos]['qual']}
+                ret.append(ret_dict)
+            cur_pos += 1
+        if cur_pos == len(pos_dicts):
+            break
+    return ret
+
+
+def fibseq_bam():
     global input_file, region, outputFolder, fa_file
 
     if len(sys.argv) < 3:
@@ -83,58 +125,69 @@ def fibseq_bam():
 
     hashes = []
 
-    records = []
     ext = path.splitext(input_file)[1]
-    if ext not in ['.bam']:
+    if ext not in ['.bam', '.gz']:
         print('Invalid input file')
         exit(-1)
-    command_line = '../target/debug/ft extract {} --region {} --m6a stdout -r'.format(input_file, region1)
-    output = subprocess.getoutput(command_line)
-    bed_records = [x.split('\t') for x in output[:-1].split('\n')]
-    # TODO - need to get records in
-    command_line = '../target/debug/ft extract {} --region {} -a stdout -s'.format(input_file, region1)
-    output = subprocess.getoutput(command_line)
-    lines = [x.split('\t') for x in output[:-1].split('\n')]
-    records = [dict(zip(lines[0], x)) for x in lines[1:]]
+    if ext == '.bam':
+        # command_line = '../target/debug/ft extract {} --region {} --m6a stdout -r'.format(input_file, region1)
+        # output = subprocess.getoutput(command_line)
+        # records = [x.split('\t') for x in output[:-1].split('\n')]
+        samfile = pysam.AlignmentFile(input_file, "rb")
+        records = samfile.fetch(region=region1)
+    else:
+        if not path.exists(input_file + '.tbi'):
+            base_bed_file = path.splitext(input_file)[0]
+            pysam.tabix_index(base_bed_file, preset='bed')
+        tbx = pysam.TabixFile(input_file)
+        records = tbx.fetch(region1, parser=pysam.asTuple())
+    tot = 0
     for cnt, record in enumerate(records):
-        line = record
+        tot = cnt + 1
         # _chrom, chromStart, chromEnd, name, coverage, strand, thickStart, thickEnd, itemRgb, blockCount, blockSizes, blockStarts = record
-        chrom, chromStart, chromEnd, name, _, _, _, _, _, _, _, blockStarts = bed_records[cnt]
+        # chrom, chromStart, chromEnd, name, _, _, _, _, _, _, _, blockStarts = record
         # Not relative locations, just literally keep track of every base
         # and remember to ignore the end two positions of the fiber record
-        chrom = record['#ct']
-        chromStart = record['st']
-        chromEnd = record['en']
-        name = record['fiber']
-
-        starts_bed = blockStarts.strip(',').split(',')[1:-1]
-        blockStarts = record['m6a']
-        starts = blockStarts.strip(',').split(',')
-        temp = [x for x in starts_bed if x not in starts]
-        blockScores = record['m6a_qual']
-        scores = blockScores.strip(',').split(',')[1:-1]
+        # starts = blockStarts.split(',')[1:-1]
+        # line = record
+        chrom = record.reference_name
+        chromStart = record.reference_start
+        chromEnd = record.reference_end
+        name = record.query_name
+        keys = [x for x in record.modified_bases.keys() if 'a' in x]
+        base_starts = []
+        for key in keys:
+            base_starts += [{'q_pos': x, 'qual': v} for x, v in record.modified_bases[key]]
+        sorted_starts = sorted(base_starts, key=lambda x: x['q_pos'])
+        starts = realign_pos(record.aligned_pairs, sorted_starts)
+        line = [record.reference_name, chromStart, chromEnd, name]
 
         if not starts:
             continue
-        hash_m6A = dict([(int(k), 1) for k in starts])
+
+        hash_m6A = dict([(x['r_pos'] - chromStart, x['qual']) for x in starts])
 
         chromStart, chromEnd = [int(x) for x in [chromStart, chromEnd]]
         # mappedLength = chromEnd - chromStart
         # print(chrom, chromStart, mappedLength)
 
         sort_vector = []
-        # for refBase0 in refBasesAT:
+        qual_vector = []
         idx0 = bisect_left(refBasesAT, chromStart + 2)
         idx1 = bisect_left(refBasesAT, chromEnd - 1)
         for refBase0 in refBasesAT[idx0:idx1]:
-            # Ignoring the BED12 end positions that aren't considered in the track
+        # for refBase0 in refBasesAT:
+            # double check that ignoring the BED12 end positions that aren't considered in the track
             if refBase0 > chromStart + 1 and refBase0 < chromEnd - 1:
                 offset = refBase0 - chromStart
-                methylated = 1.0 if offset in hash_m6A else 0.0
-                sort_vector.append(methylated)
+                if offset in hash_m6A:  # methylated
+                    sort_vector.append(1.0)
+                    qual_vector.append(hash_m6A[offset])
+                else:
+                    sort_vector.append(0.0)
+                    qual_vector.append(-1)
             else:
-                # Will include with NA's for missing extent
-                # out of range for this molecule, incomplete overlap
+                # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                 print('should not get here')
                 sort_vector.append(float('nan'))
         # print(sort_vector)
@@ -148,7 +201,7 @@ def fibseq_bam():
             'chrom': chrom,
             'name': name,
             'line': line,
-            'vector': sort_vector,
+            'vector': qual_vector,
             'start': chromStart,
             'end': chromEnd,
             'idx0': idx0,
@@ -160,13 +213,13 @@ def fibseq_bam():
 
         hashes.append(hash)
 
-    print('Records processed: {}'.format(len(records)))
+    print('Records processed: {}'.format(tot))
 
     makedirs(outputFolder, exist_ok=True)
     compact_output = '-c' in sys.argv
 
     # Matrix of the m6A statuses within excerpt region
-    fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}.txt'.format(chromosome, highlightMin0, highlightMax1))
+    fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
     out_matrix = open(fileMatrix, 'w')
     if compact_output:
         matrixHeader = '\t'.join(['chrom', 'start', 'end', 'ID', ''.join(refBases_string)]) + '\n'
@@ -182,23 +235,27 @@ def fibseq_bam():
     methsorted = sorted(hashes, key=lambda x: x.get('meanmeth'), reverse=True)
     for hashref in methsorted:
         # print(hashref['meanmeth'])
-        out_sorted.write('{}\n'.format('\t'.join(hashref['line'])))
+        out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line']])))
         if compact_output:
             full_line = ['_'] * len(refBasesAT)
-            full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else '1' for x in hashref['vector']]
-            # full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else str(randint(1,9)) for x in hashref['vector']]
-            out_matrix.write('{}\t{}\t{}\t{}\t{}\n'.format(hashref['chrom'], hashref['start'], hashref['end'], hashref['name'], ''.join(full_line)))
+            # full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else '1' for x in hashref['vector']]
+            full_line[hashref['idx0']:hashref['idx1']] = ['.' if x < 0 else str(x // 26) for x in hashref['vector']]
+            out_matrix.write(
+                '{}\t{}\t{}\t{}\t{}\n'.format(hashref['chrom'], hashref['start'], hashref['end'], hashref['name'],
+                                              ''.join(full_line)))
         else:
             full_line = [float('nan')] * len(refBasesAT)
             full_line[idx0:idx1] = hashref['vector']
             out_matrix.write('{}\t{}\n'.format(hashref['name'], '\t'.join([str(x) for x in full_line])))
 
-    print('Record count (min, max): {} ({}, {})'.format(len(methsorted), methsorted[-1]['meanmeth'], methsorted[0]['meanmeth']))
+    print('Record count (min, max): {} ({}, {})'.format(len(methsorted), methsorted[-1]['meanmeth'],
+                                                        methsorted[0]['meanmeth']))
 
     out_sorted.close()
     out_matrix.close()
 
     print('Completed : {:.1f} min'.format((timer() - start) / 60))
+
 
 if __name__ == '__main__':
     fibseq_bam()
