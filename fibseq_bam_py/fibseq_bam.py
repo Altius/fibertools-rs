@@ -84,8 +84,11 @@ def fibseq_bam():
     global input_file, region, outputFolder, fa_file
 
     if len(sys.argv) < 3:
-        print('Usage:\t{} input_file region [-o output_folder] [-f fa_file] [-s cpg,nuc,msp]'.format(path.basename(sys.argv[0])))
+        py_file = path.basename(sys.argv[0])
+        print('Usage:\tpython {} input_file region [-o output_folder] [-f fa_file] [-s cpg,nuc,msp]'.format(py_file))
         print('      \t input file can be indexed .bed.gz or indexed .bam')
+        print('      \t e.g. python {} chrX_100Kb_resdir_bed.aligned.m6a.bam chrX:49002000-49003000 -s cpg,nuc'.format(py_file))
+        print('      \t   runs m6a output over the region specified and also shows cpg and nuc data')
         exit(0)
 
     if not input_file:
