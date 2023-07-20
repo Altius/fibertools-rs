@@ -84,28 +84,34 @@ def fibseq_bam():
 
     records = []
     ext = path.splitext(input_file)[1]
-    if ext not in ['.bam', '.gz']:
+    if ext not in ['.bam']:
         print('Invalid input file')
         exit(-1)
-    if ext == '.bam':
-        command_line = '../target/debug/ft extract {} --region {} --m6a stdout -r'.format(input_file, region1)
-        output = subprocess.getoutput(command_line)
-        records = [x.split('\t') for x in output[:-1].split('\n')]
-    else:
-        if not path.exists(input_file + '.tbi'):
-            base_bed_file = path.splitext(input_file)[0]
-            pysam.tabix_index(base_bed_file, preset='bed')
-        tbx = pysam.TabixFile(input_file)
-        records = tbx.fetch(region1, parser=pysam.asTuple())
-    tot = 0
+    command_line = '../target/debug/ft extract {} --region {} --m6a stdout -r'.format(input_file, region1)
+    output = subprocess.getoutput(command_line)
+    bed_records = [x.split('\t') for x in output[:-1].split('\n')]
+    # TODO - need to get records in
+    command_line = '../target/debug/ft extract {} --region {} -a stdout -s'.format(input_file, region1)
+    output = subprocess.getoutput(command_line)
+    lines = [x.split('\t') for x in output[:-1].split('\n')]
+    records = [dict(zip(lines[0], x)) for x in lines[1:]]
     for cnt, record in enumerate(records):
-        tot = cnt + 1
         line = record
         # _chrom, chromStart, chromEnd, name, coverage, strand, thickStart, thickEnd, itemRgb, blockCount, blockSizes, blockStarts = record
-        chrom, chromStart, chromEnd, name, _, _, _, _, _, _, _, blockStarts = record
+        chrom, chromStart, chromEnd, name, _, _, _, _, _, _, _, blockStarts = bed_records[cnt]
         # Not relative locations, just literally keep track of every base
         # and remember to ignore the end two positions of the fiber record
-        starts = blockStarts.split(',')[1:-1]
+        chrom = record['#ct']
+        chromStart = record['st']
+        chromEnd = record['en']
+        name = record['fiber']
+
+        starts_bed = blockStarts.strip(',').split(',')[1:-1]
+        blockStarts = record['m6a']
+        starts = blockStarts.strip(',').split(',')
+        temp = [x for x in starts_bed if x not in starts]
+        blockScores = record['m6a_qual']
+        scores = blockScores.strip(',').split(',')[1:-1]
 
         if not starts:
             continue
@@ -153,7 +159,7 @@ def fibseq_bam():
 
         hashes.append(hash)
 
-    print('Records processed: {}'.format(tot))
+    print('Records processed: {}'.format(len(records)))
 
     makedirs(outputFolder, exist_ok=True)
     compact_output = '-c' in sys.argv
