@@ -108,7 +108,7 @@ def fibseq_bam():
     show_nuc = True if 'nuc' in show_list else False
     show_msp = True if 'msp' in show_list else False
 
-    start = timer()
+    start_time = timer()
 
     # get gene region
     tmp = pysam.FastaFile(fa_file)
@@ -332,7 +332,7 @@ def fibseq_bam():
     out_sorted.close()
     out_matrix.close()
 
-    print('Completed : {:.1f} min'.format((timer() - start) / 60))
+    print('Completed : {:.1f} sec'.format((timer() - start_time)))
 
 
 if __name__ == '__main__':
