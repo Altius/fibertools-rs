@@ -97,6 +97,8 @@ def fibseq_bam():
         region = sys.argv[2]
     if '-o' in sys.argv:
         outputFolder = sys.argv[sys.argv.index('-o') + 1]
+    if '-f' in sys.argv:
+        fa_file = sys.argv[sys.argv.index('-f') + 1]
 
     show_m6a = True  # always on for now
     show_list = ''
