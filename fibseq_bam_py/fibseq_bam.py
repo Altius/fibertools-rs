@@ -31,9 +31,9 @@ fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_10Mbp_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:40000000-50000000'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bed.gz'
-input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
+# input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:49200000-49300000'
-region = 'chrX:49202000-49203000'
+# region = 'chrX:49202000-49203000'
 
 
 def cigar2end(left, cigar):
