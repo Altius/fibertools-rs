@@ -15,8 +15,8 @@ import re
 input_file = None
 region = None
 outputFolder = './output'
-fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
-# fa_file = '/home/ehaugen/refseq/hg38/hg38.fa'
+# fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
+fa_file = '/home/ehaugen/refseq/hg38/hg38.fa'
 
 # input_file = '/net/seq/data2/projects/Palladium_Dataset/stream/alld2rest.rerun.nokinetics.rg.bam.allchr.dipcall.haplotagged.HAP1.bam'
 # region = 'chrX:0-45000000'
@@ -121,7 +121,7 @@ def fibseq_bam():
 
     expectedReferenceLength = highlightMax1 - highlightMin0
     foundReferenceLength = len(referenceString)
-    print(foundReferenceLength)
+    print('Region bases: {}'.format(foundReferenceLength))
     if foundReferenceLength != expectedReferenceLength:
         print('Expecting {} bp but read {}'.format(expectedReferenceLength, foundReferenceLength))
         exit(-1)
@@ -134,7 +134,7 @@ def fibseq_bam():
             if referenceString[i].upper() in ['A', 'T']:
                 refBasesAT.append(highlightMin0 + i)
         countATsInRange = len(refBasesAT)
-        print('AT count:{}'.format(countATsInRange))
+        print('AT count in region:{}'.format(countATsInRange))
 
     # Mark the C's and G's that could get m6A calls
     if show_cpg:
@@ -142,8 +142,8 @@ def fibseq_bam():
         for i in range(expectedReferenceLength):
             if referenceString[i].upper() in ['C', 'G']:
                 refBasesCG.append(highlightMin0 + i)
-        countCGsInRange = len(refBasesAT)
-        print('AT count:{}'.format(countCGsInRange))
+        countCGsInRange = len(refBasesCG)
+        print('CG count in region:{}'.format(countCGsInRange))
 
     hashes = []
     disp_m6a = []
@@ -325,8 +325,9 @@ def fibseq_bam():
         if show_msp:
             out_matrix.write('\t\t\t\tmsp\t{}\n'.format(hashref['disp_msp']))
 
-    print('Record count (min, max): {} ({}, {})'.format(len(methsorted), methsorted[-1]['meanmeth'],
-                                                        methsorted[0]['meanmeth']))
+    print('Record count (min, max): {} ({}, {})'.format(len(methsorted),
+                                methsorted[-1]['meanmeth'] if len(methsorted) else 0.0,
+                                methsorted[0]['meanmeth'] if len(methsorted) else 0.0))
 
     out_sorted.close()
     out_matrix.close()
