@@ -54,6 +54,8 @@ pub struct FiberOut {
     pub quality: bool,
     pub min_ml_score: u8,
     pub full_float: bool,
+    pub alt: Option<Box<dyn Write>>,
+    pub alt_fmt: String,
     pub region: String
 }
 
@@ -70,6 +72,8 @@ impl FiberOut {
         quality: bool,
         min_ml_score: u8,
         full_float: bool,
+        alt: &Option<String>,
+        alt_fmt: String,
         region: String,
     ) -> Result<Self> {
         let m6a = match m6a {
@@ -92,6 +96,10 @@ impl FiberOut {
             Some(all) => Some(writer(all)?),
             None => None,
         };
+        let alt = match alt {
+            Some(alt) => Some(writer(alt)?),
+            None => None,
+        };
         let mut min_ml_score = min_ml_score;
         if full_float {
             min_ml_score = 0;
@@ -108,6 +116,8 @@ impl FiberOut {
             quality,
             min_ml_score,
             full_float,
+            alt,
+            alt_fmt,
             region
         })
     }

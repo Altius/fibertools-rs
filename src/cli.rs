@@ -199,7 +199,13 @@ pub enum Commands {
         #[clap(short, long)]
         all: Option<String>,
 
-        /// Output path for a tabular format including "all" fiberseq information in the bam
+        /// Altius region viewing report
+        #[clap(long)]
+        alt: Option<String>,
+        /// format of the altius region viewing report
+        #[clap(long, default_value = "")]
+        alt_fmt: String,
+        /// region setting for report
         #[clap(long, default_value = "")]
         region: String,
 

@@ -81,6 +81,8 @@ pub fn main() -> Result<(), Error> {
             nuc,
             all,
             full_float,
+            alt,
+            alt_fmt,
             region
         }) => {
             let out_files = FiberOut::new(
@@ -94,6 +96,8 @@ pub fn main() -> Result<(), Error> {
                 *quality,
                 *min_ml_score,
                 *full_float,
+                alt,
+                alt_fmt.to_string(),
                 region.to_string()
             )?;
             if region.len() > 0 {

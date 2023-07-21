@@ -209,6 +209,25 @@ impl FiberseqData {
         self.to_bed12(reference, &starts, &lengths, color)
     }
 
+    pub fn write_alt(&self, reference: bool) -> String {
+        let color = "128,0,128";
+        let m6a_starts = self.base_mods.m6a_positions(true);
+        if m6a_starts.is_empty() {
+            return "".to_string();
+        }
+        // TODO - get qual values
+        let cpg_starts = self.base_mods.cpg_positions(true);
+        let ref_nuc_starts = self.get_nuc(true, true);
+        let ref_nuc_lengths = self.get_nuc(true, false);
+        let ref_msp_starts = self.get_msp(true, true);
+        let ref_msp_lengths = self.get_msp(true, false);
+
+        let lengths = vec![1; m6a_starts.len()];
+        self.to_bed12(reference, &m6a_starts, &lengths, color)
+    }
+
+
+
     pub fn get_rq(&self) -> Option<f32> {
         if let Ok(Aux::Float(f)) = self.record.aux(b"rq") {
             Some(f)
@@ -552,6 +571,18 @@ pub fn process_bam_chunk(
                 .collect();
             for line in out {
                 write_to_file(&line, all);
+            }
+        }
+        None => {}
+    }
+    match &mut out_files.alt {
+        Some(alt) => {
+            let out: Vec<String> = fiber_data
+                .par_iter()
+                .map(|r| r.write_alt(out_files.reference))
+                .collect();
+            for line in out {
+                write_to_file(&line, alt);
             }
         }
         None => {}
