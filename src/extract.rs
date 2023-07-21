@@ -246,7 +246,7 @@ impl FiberseqData {
             "m6a_qual",
             "5mC",
             "ref_5mC",
-            "cpg_qual",
+            "5mC_qual",
         ));
         x
     }

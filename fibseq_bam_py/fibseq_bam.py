@@ -166,7 +166,7 @@ def fibseq_bam():
         chromEnd = record.reference_end
         name = record.query_name
 
-        line = [record.reference_name, chromStart, chromEnd, name]
+        line = [chrom, chromStart, chromEnd, name]
 
         seg_len = highlightMax1 - highlightMin0
         disp_string = [' '] * seg_len
@@ -286,8 +286,6 @@ def fibseq_bam():
             'disp_msp': ''.join(disp_msp),
             'start': chromStart,
             'end': chromEnd,
-            'idx0': idx0,
-            'idx1': idx1,
             'inputorder': cnt + 1,
             'meanmeth': mean
         }
