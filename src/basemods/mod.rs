@@ -1,5 +1,6 @@
 use bamlift::*;
 use bio::alphabets::dna::revcomp;
+use bio_io::*;
 use itertools::{izip, multiunzip};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -7,9 +8,11 @@ use rust_htslib::{
     bam,
     bam::record::{Aux, AuxArray},
 };
+use std::collections::HashMap;
+
 use std::convert::TryFrom;
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, PartialOrd, Ord)]
 pub struct BaseMod {
     pub modified_base: u8,
     pub strand: char,
@@ -95,6 +98,13 @@ pub struct BaseMods {
 
 impl BaseMods {
     pub fn new(record: &bam::Record, min_ml_score: u8) -> BaseMods {
+        // my basemod parser is ~25% faster than rust_htslib's
+        // let new = BaseMods::rust_htslib_mm_ml_parser(record, min_ml_score);
+        //assert_eq!(new, old);
+        BaseMods::my_mm_ml_parser(record, min_ml_score)
+    }
+
+    pub fn my_mm_ml_parser(record: &bam::Record, min_ml_score: u8) -> BaseMods {
         // regex for matching the MM tag
         lazy_static! {
             static ref MM_RE: Regex =
@@ -180,6 +190,10 @@ impl BaseMods {
                         .filter(|(&ml, &_mm)| ml >= min_ml_score)
                         .unzip();
 
+                // don't add empty basemods
+                if modified_positions.is_empty() {
+                    continue;
+                }
                 // add to a struct
                 let mods = BaseMod::new(
                     record,
@@ -202,8 +216,64 @@ impl BaseMods {
                 num_mods_seen
             );
         }
-
+        // needed so I can compare methods
+        rtn.sort();
         BaseMods { base_mods: rtn }
+    }
+
+    pub fn hashmap_to_basemods(
+        map: HashMap<(i32, i32, i32), Vec<(i64, u8)>>,
+        record: &bam::Record,
+    ) -> BaseMods {
+        let mut rtn = vec![];
+        for (mod_info, mods) in map {
+            let mod_base = mod_info.0 as u8;
+            let mod_type = mod_info.1 as u8 as char;
+            let mod_strand = if mod_info.2 == 0 { '+' } else { '-' };
+            let (mut positions, mut qualities): (Vec<i64>, Vec<u8>) = mods.into_iter().unzip();
+            if record.is_reverse() {
+                let length = record.seq_len() as i64;
+                positions = positions
+                    .into_iter()
+                    .rev()
+                    .map(|p| length - p - 1)
+                    .collect();
+                qualities.reverse();
+            }
+            let mods = BaseMod::new(record, mod_base, mod_strand, mod_type, positions, qualities);
+            rtn.push(mods);
+        }
+        // needed so I can compare methods
+        rtn.sort();
+        BaseMods { base_mods: rtn }
+    }
+
+    /// this is actually way slower than my parser for some reason...
+    /// so I am not going to use it
+    pub fn rust_htslib_mm_ml_parser(record: &bam::Record, min_ml_score: u8) -> BaseMods {
+        let mut base_mods = HashMap::new();
+
+        match record.basemods_iter() {
+            Ok(mods) => {
+                for bp in mods {
+                    let (pos, m) = bp.unwrap();
+                    if min_ml_score > m.qual as u8 {
+                        continue;
+                    }
+                    let z = (m.canonical_base, m.modified_base, m.strand);
+                    let cur_mod = base_mods.entry(z).or_insert(vec![]);
+                    cur_mod.push((pos as i64, m.qual as u8));
+                    continue;
+                }
+            }
+            _ => {
+                return {
+                    log::warn!("Rust hts-lib failed to parse basemods, trying custom parser.");
+                    BaseMods::my_mm_ml_parser(record, min_ml_score)
+                }
+            }
+        }
+        BaseMods::hashmap_to_basemods(base_mods, record)
     }
 
     /// remove m6a base mods from the struct
@@ -350,6 +420,10 @@ impl BaseMods {
         self.helper_get_cpg(false)
     }
 
+    pub fn forward_cpg(&self) -> (Vec<i64>, Vec<i64>, Vec<u8>) {
+        self.helper_get_cpg(true)
+    }
+
     /// Example MM tag: MM:Z:C+m,11,6,10;A+a,0,0,0;
     /// Example ML tag: ML:B:C,157,30,2,164,118,255
     pub fn add_mm_and_ml_tags(&self, record: &mut bam::Record) {
@@ -426,7 +500,7 @@ mod tests {
             .target(Target::Stderr)
             .filter(None, log::LevelFilter::Debug)
             .init();
-        let mut bam = bam::Reader::from_path(&".test/all.bam").unwrap();
+        let mut bam = bam::Reader::from_path(&"tests/data/all.bam").unwrap();
         for rec in bam.records() {
             let mut rec = rec.unwrap();
             let mods = BaseMods::new(&rec, 0);

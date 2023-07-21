@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use niffler::get_reader;
 use regex::Regex;
 use rust_htslib::bam;
+use rust_htslib::bam::record::Aux;
 use rust_htslib::bam::Read;
 use std::collections::HashMap;
 use std::env;
@@ -50,14 +51,25 @@ pub fn writer(filename: &str) -> Result<Box<dyn Write>> {
         let ext = Path::new(filename).extension();
         let path = PathBuf::from(filename);
         let buffer = get_output(Some(path))?;
-        if ext == Some(OsStr::new("gz")) {
+        if ext == Some(OsStr::new("gz")) || ext == Some(OsStr::new("bgz")) {
             let writer = ZBuilder::<Bgzf, _>::new()
                 .num_threads(COMPRESSION_THREADS)
                 .compression_level(Compression::new(COMPRESSION_LEVEL))
                 .from_writer(buffer);
             Ok(Box::new(writer))
         } else {
-            Ok(buffer)
+            let ext = Path::new(filename).extension();
+            let path = PathBuf::from(filename);
+            let buffer = get_output(Some(path))?;
+            if ext == Some(OsStr::new("gz")) {
+                let writer = ZBuilder::<Bgzf, _>::new()
+                    .num_threads(COMPRESSION_THREADS)
+                    .compression_level(Compression::new(COMPRESSION_LEVEL))
+                    .from_writer(buffer);
+                Ok(Box::new(writer))
+            } else {
+                Ok(buffer)
+            }
         }
     }
 }
@@ -83,10 +95,10 @@ pub fn write_to_stdout(out: &str) {
 /// ```
 /// use bio_io::buffer_from;
 /// use std::io;
-/// let reader = buffer_from(".test/test.txt.gz").expect("Error: cannot open file");
+/// let reader = buffer_from("../tests/data/test.txt.gz").expect("Error: cannot open file");
 /// let msg = io::read_to_string(reader).unwrap();
 /// assert_eq!(msg, "Hello World!\n");
-/// let reader = buffer_from(".test/test.txt").expect("Error: cannot open file");
+/// let reader = buffer_from("../tests/data/test.txt").expect("Error: cannot open file");
 /// let msg = io::read_to_string(reader).unwrap();
 /// assert_eq!(msg, "Hello World!\n");
 /// ```
@@ -193,7 +205,7 @@ impl<'a> Iterator for BamChunk<'a> {
             None
         } else {
             let duration = start.elapsed().as_secs_f64();
-            log::info!(
+            log::debug!(
                 "Read {} bam records at {}.",
                 format!("{:}", cur_vec.len()).bright_magenta().bold(),
                 format!("{:.2?} reads/s", cur_vec.len() as f64 / duration)
@@ -276,4 +288,70 @@ pub fn find_pb_polymerase(header: &bam::Header) -> PbChem {
         binding_kit
     );
     chemistry.clone()
+}
+
+///```
+/// use rust_htslib::{bam, bam::Read};
+/// use log;
+/// let mut bam = bam::Reader::from_path(&"../tests/data/all.bam").unwrap();
+/// for record in bam.records() {
+///     let record = record.unwrap();
+///     let n_s = bio_io::get_u32_tag(&record, b"ns");
+///     let n_l = bio_io::get_u32_tag(&record, b"nl");
+///     let a_s = bio_io::get_u32_tag(&record, b"as");
+///     let a_l = bio_io::get_u32_tag(&record, b"al");
+///     log::debug!("{:?}", a_s);
+/// }
+///```
+pub fn get_u32_tag(record: &bam::Record, tag: &[u8; 2]) -> Vec<i64> {
+    if let Ok(Aux::ArrayU32(array)) = record.aux(tag) {
+        let read_array = array.iter().map(|x| x as i64).collect::<Vec<_>>();
+        read_array
+    } else {
+        vec![]
+    }
+}
+
+pub fn get_u8_tag(record: &bam::Record, tag: &[u8; 2]) -> Vec<u8> {
+    if let Ok(Aux::ArrayU8(array)) = record.aux(tag) {
+        let read_array = array.iter().collect::<Vec<_>>();
+        read_array
+    } else {
+        vec![]
+    }
+}
+
+/// Convert the PacBio u16 tag into the u8 tag we normally expect.
+pub fn get_pb_u16_tag_as_u8(record: &bam::Record, tag: &[u8; 2]) -> Vec<u8> {
+    if let Ok(Aux::ArrayU16(array)) = record.aux(tag) {
+        let read_array = array.iter().collect::<Vec<_>>();
+        read_array
+            .iter()
+            .map(|&x| {
+                if x < 64 {
+                    x
+                } else if x < 191 {
+                    (x - 64) / 2 + 64
+                } else if x < 445 {
+                    (x - 192) / 4 + 128
+                } else if x < 953 {
+                    (x - 448) / 8 + 192
+                } else {
+                    255
+                }
+            })
+            .map(|x| x as u8)
+            .collect()
+    } else {
+        vec![]
+    }
+}
+
+pub fn get_f32_tag(record: &bam::Record, tag: &[u8; 2]) -> Vec<f32> {
+    if let Ok(Aux::ArrayFloat(array)) = record.aux(tag) {
+        let read_array = array.iter().collect::<Vec<_>>();
+        read_array
+    } else {
+        vec![]
+    }
 }

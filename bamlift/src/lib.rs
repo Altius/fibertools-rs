@@ -1,4 +1,4 @@
-use rust_htslib::{bam, bam::ext::BamRecordExtensions, bam::record::Aux};
+use rust_htslib::{bam, bam::ext::BamRecordExtensions};
 use std::fmt::{Debug, Display};
 
 /// Merge two lists into a sorted list
@@ -134,6 +134,7 @@ fn liftover_closest(record: &bam::Record, positions: &[i64], get_reference: bool
     if record.is_unmapped() {
         return positions.iter().map(|_x| -1).collect();
     }
+
     // real work
     let (q_pos, r_pos): (Vec<i64>, Vec<i64>) = record
         .aligned_pairs()
@@ -168,7 +169,7 @@ fn liftover_closest(record: &bam::Record, positions: &[i64], get_reference: bool
 /// use log;
 /// use env_logger::{Builder, Target};;
 /// Builder::new().target(Target::Stderr).filter(None, log::LevelFilter::Debug).init();
-/// let mut bam = bam::Reader::from_path(&"../.test/all.bam").unwrap();
+/// let mut bam = bam::Reader::from_path(&"../tests/data/all.bam").unwrap();
 /// for record in bam.records() {
 ///     let record = record.unwrap();
 ///     let seq_len = i64::try_from(record.seq_len()).unwrap();
@@ -216,7 +217,7 @@ pub fn get_closest_reference_range(
 }
 
 /// liftover positions using the cigar string
-fn liftover_exact(record: &bam::Record, positions: &[i64], get_reference: bool) -> Vec<i64> {
+fn _liftover_exact_old(record: &bam::Record, positions: &[i64], get_reference: bool) -> Vec<i64> {
     // find the shared positions in the reference
     let mut return_positions = vec![];
     let mut cur_pos = 0;
@@ -249,6 +250,60 @@ fn liftover_exact(record: &bam::Record, positions: &[i64], get_reference: bool) 
     return_positions
 }
 
+/// liftover positions using the cigar string
+fn liftover_exact_new(record: &bam::Record, positions: &[i64], get_reference: bool) -> Vec<i64> {
+    // find the shared positions in the reference
+    let mut return_positions = vec![];
+    let mut cur_idx = 0;
+    // ends are not inclusive, I checked.
+    for ([q_st, q_en], [r_st, r_en]) in record.aligned_block_pairs() {
+        let (st, en) = if get_reference {
+            (q_st, q_en)
+        } else {
+            (r_st, r_en)
+        };
+        // check bounds
+        if cur_idx == positions.len() {
+            break;
+        }
+        let mut cur_pos = positions[cur_idx];
+        // need to go to the next block
+        while cur_pos < en {
+            if cur_pos >= st {
+                let dist_from_start = cur_pos - st;
+                let rtn_pos = if get_reference {
+                    r_st + dist_from_start
+                } else {
+                    q_st + dist_from_start
+                };
+                return_positions.push(rtn_pos);
+            } else {
+                return_positions.push(-1);
+            }
+            // reset current position
+            cur_idx += 1;
+            if cur_idx == positions.len() {
+                break;
+            }
+            cur_pos = positions[cur_idx];
+        }
+    }
+
+    // add values for things that won't lift at the end
+    while positions.len() > return_positions.len() {
+        return_positions.push(-1);
+    }
+    assert_eq!(positions.len(), return_positions.len());
+    return_positions
+}
+
+fn liftover_exact(record: &bam::Record, positions: &[i64], get_reference: bool) -> Vec<i64> {
+    let new = liftover_exact_new(record, positions, get_reference);
+    //let old = _liftover_exact_old(record, positions, get_reference);
+    //assert_eq!(new, old);
+    new
+}
+
 pub fn get_exact_reference_positions(record: &bam::Record, query_positions: &[i64]) -> Vec<i64> {
     if record.is_unmapped() {
         query_positions.iter().map(|_x| -1).collect()
@@ -262,73 +317,5 @@ pub fn get_exact_query_positions(record: &bam::Record, reference_positions: &[i6
         reference_positions.iter().map(|_x| -1).collect()
     } else {
         liftover_exact(record, reference_positions, false)
-    }
-}
-
-///```
-/// use rust_htslib::{bam, bam::Read};
-/// use log;
-/// use env_logger::{Builder, Target};;
-/// Builder::new().target(Target::Stderr).filter(None, log::LevelFilter::Debug).init();
-/// let mut bam = bam::Reader::from_path(&"../.test/all.bam").unwrap();
-/// for record in bam.records() {
-///     let record = record.unwrap();
-///     let n_s = bamlift::get_u32_tag(&record, b"ns");
-///     let n_l = bamlift::get_u32_tag(&record, b"nl");
-///     let a_s = bamlift::get_u32_tag(&record, b"as");
-///     let a_l = bamlift::get_u32_tag(&record, b"al");
-///     log::debug!("{:?}", a_s);
-/// }
-///```
-pub fn get_u32_tag(record: &bam::Record, tag: &[u8; 2]) -> Vec<i64> {
-    if let Ok(Aux::ArrayU32(array)) = record.aux(tag) {
-        let read_array = array.iter().map(|x| x as i64).collect::<Vec<_>>();
-        read_array
-    } else {
-        vec![]
-    }
-}
-
-pub fn get_u8_tag(record: &bam::Record, tag: &[u8; 2]) -> Vec<u8> {
-    if let Ok(Aux::ArrayU8(array)) = record.aux(tag) {
-        let read_array = array.iter().collect::<Vec<_>>();
-        read_array
-    } else {
-        vec![]
-    }
-}
-
-/// Convert the PacBio u16 tag into the u8 tag we normally expect.
-pub fn get_pb_u16_tag_as_u8(record: &bam::Record, tag: &[u8; 2]) -> Vec<u8> {
-    if let Ok(Aux::ArrayU16(array)) = record.aux(tag) {
-        let read_array = array.iter().collect::<Vec<_>>();
-        read_array
-            .iter()
-            .map(|&x| {
-                if x < 64 {
-                    x
-                } else if x < 191 {
-                    (x - 64) / 2 + 64
-                } else if x < 445 {
-                    (x - 192) / 4 + 128
-                } else if x < 953 {
-                    (x - 448) / 8 + 192
-                } else {
-                    255
-                }
-            })
-            .map(|x| x as u8)
-            .collect()
-    } else {
-        vec![]
-    }
-}
-
-pub fn get_f32_tag(record: &bam::Record, tag: &[u8; 2]) -> Vec<f32> {
-    if let Ok(Aux::ArrayFloat(array)) = record.aux(tag) {
-        let read_array = array.iter().collect::<Vec<_>>();
-        read_array
-    } else {
-        vec![]
     }
 }
