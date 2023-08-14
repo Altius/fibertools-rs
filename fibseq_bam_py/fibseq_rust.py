@@ -108,7 +108,9 @@ def fibseq_bam():
     # starts_bed = [int(x) for x in blockStarts.strip(',').split(',')[1:-1]]
     # temp = [x for x in m6a_starts if x not in starts_bed]
 
-    command_line = '../target/debug/ft extract {} --region {} -a stdout -s -r'.format(input_file, region1)
+    # exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
+    exe_path = '/net/photo/photo1/Keith/ft'
+    command_line = '{} extract {} --region {} -a stdout -s -r'.format(exe_path, input_file, region1)
     output = subprocess.getoutput(command_line)
     output = output[output.index('#ct'):]  # strip warnings
     lines = [x.split('\t') for x in output[:-1].split('\n')]
