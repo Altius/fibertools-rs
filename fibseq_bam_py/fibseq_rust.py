@@ -110,6 +110,7 @@ def fibseq_bam():
 
     command_line = '../target/debug/ft extract {} --region {} -a stdout -s -r'.format(input_file, region1)
     output = subprocess.getoutput(command_line)
+    output = output[output.index('#ct'):]  # strip warnings
     lines = [x.split('\t') for x in output[:-1].split('\n')]
     records = [dict(zip(lines[0], x)) for x in lines[1:]]
     for cnt, record in enumerate(records):
@@ -125,6 +126,10 @@ def fibseq_bam():
         start = max(0, chromStart - highlightMin0)
         end = min(seg_len, chromEnd - highlightMin0)
         disp_string[start: end] = ['.'] * (end - start)
+        disp_m6q = []
+        disp_cpg = []
+        disp_nuc = []
+        disp_msp = []
 
         if show_m6a:
             ref_starts = [int(x) - chromStart for x in record['ref_m6a'].strip(',').split(',')]
