@@ -31,9 +31,9 @@ fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_10Mbp_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:40000000-50000000'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bed.gz'
-input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
+# input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:49200000-49300000'
-region = 'chrX:49202000-49203000'
+# region = 'chrX:49202000-49203000'
 
 
 def fibseq_bam():
@@ -117,6 +117,7 @@ def fibseq_bam():
         chromStart = int(record['st'])
         chromEnd = int(record['en'])
         name = record['fiber']
+        strand = record['strand']
         line = [chrom, chromStart, chromEnd, name]
 
         seg_len = highlightMax1 - highlightMin0
@@ -203,7 +204,7 @@ def fibseq_bam():
                 end = min(seg_len, start + ref_lens[n])
                 start = max(0, start)
                 if start < seg_len and end > 0:
-                    disp_msp[start: end] = ['-'] * (end - start)
+                    disp_msp[start: end] = ['+'] * (end - start)
 
         mean = np.nanmean(sort_vector)
         hash = {
@@ -217,6 +218,7 @@ def fibseq_bam():
             'disp_msp': ''.join(disp_msp),
             'start': chromStart,
             'end': chromEnd,
+            'strand': strand,
             'inputorder': cnt + 1,
             'meanmeth': mean
         }
@@ -231,7 +233,7 @@ def fibseq_bam():
     # Matrix of the m6A statuses within excerpt region
     fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
     out_matrix = open(fileMatrix, 'w')
-    matrixHeader = '\t'.join(['ID', 'chrom', 'start', 'end', 'type', referenceString]) + '\n'
+    matrixHeader = '\t'.join(['ID', 'chrom', 'start', 'end', 'strand', 'type', referenceString]) + '\n'
     out_matrix.write(matrixHeader)
 
     # Original m6A BED12 lines, just sorted (should I redo them with the header?)
@@ -245,14 +247,14 @@ def fibseq_bam():
         out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line']])))
 
         out_matrix.write(
-            '{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'],
+            '{}\t{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'], hashref['strand'],
                                           hashref['disp_m6a']))
         if show_cpg:
-            out_matrix.write('\t\t\t\tcpg\t{}\n'.format(hashref['disp_cpg']))
+            out_matrix.write('\t\t\t\t\tcpg\t{}\n'.format(hashref['disp_cpg']))
         if show_nuc:
-            out_matrix.write('\t\t\t\tnuc\t{}\n'.format(hashref['disp_nuc']))
+            out_matrix.write('\t\t\t\t\tnuc\t{}\n'.format(hashref['disp_nuc']))
         if show_msp:
-            out_matrix.write('\t\t\t\tmsp\t{}\n'.format(hashref['disp_msp']))
+            out_matrix.write('\t\t\t\t\tmsp\t{}\n'.format(hashref['disp_msp']))
 
     print('Record count (min, max): {} ({}, {})'.format(len(methsorted),
                                 methsorted[-1]['meanmeth'] if len(methsorted) else 0.0,

@@ -211,22 +211,39 @@ impl FiberseqData {
 
     pub fn write_alt(&self, reference: bool) -> String {
         let color = "128,0,128";
-        let m6a_starts = self.base_mods.m6a_positions(true);
-        if m6a_starts.is_empty() {
-            return "".to_string();
-        }
-        // TODO - get qual values
-        let cpg_starts = self.base_mods.cpg_positions(true);
+
+        use bio::io::fasta::IndexedReader;
+        // create dummy files let mut faidx = IndexedReader::from_file("/Volumes/photo2/fiberseq_data/hg38/hg38.fa");
+        const FASTA_FILE: &[u8] = b">chr1\nGTAGGCTGAAAA\nCCCC";
+        const FAI_FILE: &[u8] = b"chr1\t16\t6\t12\t13";
+
+        let seq_name = "chr1";
+        let start: u64 = 0; // start is 0-based, inclusive
+        let stop: u64 = 10; // stop is 0-based, exclusive
+                            // load the index
+        let mut faidx = IndexedReader::new(std::io::Cursor::new(FASTA_FILE), FAI_FILE).unwrap();
+        // move the pointer in the index to the desired sequence and interval
+        faidx
+            .fetch(seq_name, start, stop)
+            .expect("Couldn't fetch interval");
+        // read the subsequence defined by the interval into a vector
+        let mut seq = Vec::new();
+        faidx.read(&mut seq).expect("Couldn't read the interval");
+        assert_eq!(seq, b"GTAGGCTGAA");
+
+        let (mut m6a, ref_m6a, m6a_qual) = self.base_mods.m6a();
+        let m6a_qual: Vec<i64> = m6a_qual.into_iter().map(|a| a as i64).collect();
+        let (cpg, ref_cpg, cpg_qual) = self.base_mods.cpg();
+        let cpg_qual: Vec<i64> = cpg_qual.into_iter().map(|a| a as i64).collect();
+
         let ref_nuc_starts = self.get_nuc(true, true);
         let ref_nuc_lengths = self.get_nuc(true, false);
         let ref_msp_starts = self.get_msp(true, true);
         let ref_msp_lengths = self.get_msp(true, false);
 
-        let lengths = vec![1; m6a_starts.len()];
-        self.to_bed12(reference, &m6a_starts, &lengths, color)
+        let lengths = vec![1; m6a.len()];
+        self.to_bed12(reference, &m6a, &lengths, color)
     }
-
-
 
     pub fn get_rq(&self) -> Option<f32> {
         if let Ok(Aux::Float(f)) = self.record.aux(b"rq") {
