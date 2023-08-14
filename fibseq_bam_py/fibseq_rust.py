@@ -189,7 +189,7 @@ def fibseq_bam():
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
 
-        if show_nuc:
+        if show_nuc and record['ref_nuc_starts'] != '.':
             ref_starts = [int(x) - chromStart for x in record['ref_nuc_starts'].strip(',').split(',')]
             ref_lens = [int(x) for x in record['ref_nuc_lengths'].strip(',').split(',')]
             disp_nuc = disp_string[:]
@@ -200,7 +200,7 @@ def fibseq_bam():
                 if start < seg_len and end > 0:
                     disp_nuc[start: end] = ['-'] * (end - start)
 
-        if show_msp:
+        if show_msp and record['ref_msp_starts'] != '.':
             ref_starts = [int(x) - chromStart for x in record['ref_msp_starts'].strip(',').split(',')]
             ref_lens = [int(x) for x in record['ref_msp_lengths'].strip(',').split(',')]
             disp_msp = disp_string[:]
