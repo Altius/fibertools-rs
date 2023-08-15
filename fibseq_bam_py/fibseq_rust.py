@@ -61,7 +61,7 @@ def fibseq_bam():
     show_list = ''
     if '-s' in sys.argv:
         show_list = sys.argv[sys.argv.index('-s') + 1]
-    show_cpg = True if 'cpg' in show_list else False
+    show_m5C = True if 'm5C' in show_list else False
     show_nuc = True if 'nuc' in show_list else False
     show_msp = True if 'msp' in show_list else False
 
@@ -84,14 +84,22 @@ def fibseq_bam():
         exit(-1)
 
     # Mark the A's and T's that could get m6A calls
-    refBasesAT = []
-    refBases_string = []
-    for i in range(expectedReferenceLength):
-        if referenceString[i].upper() in ['A', 'T']:
-            refBasesAT.append(highlightMin0 + i)
-            refBases_string.append(referenceString[i].upper())
-    countATsInRange = len(refBasesAT)
-    print(countATsInRange)
+    if show_m6a:
+        refBasesAT = []
+        for i in range(expectedReferenceLength):
+            if referenceString[i].upper() in ['A', 'T']:
+                refBasesAT.append(highlightMin0 + i)
+        countATsInRange = len(refBasesAT)
+        print('AT count in region:{}'.format(countATsInRange))
+
+    # Mark the C's and G's that could get m5C calls
+    if show_m5C:
+        refBasesCG = []
+        for i in range(expectedReferenceLength):
+            if referenceString[i].upper() in ['C', 'G']:
+                refBasesCG.append(highlightMin0 + i)
+        countCGsInRange = len(refBasesCG)
+        print('CG count in region:{}'.format(countCGsInRange))
 
     hashes = []
 
@@ -121,14 +129,15 @@ def fibseq_bam():
         chromEnd = int(record['en'])
         name = record['fiber']
         strand = record['strand']
-        line = [chrom, chromStart, chromEnd, name]
+        line = [chrom, chromStart, chromEnd, name, strand]
 
         seg_len = highlightMax1 - highlightMin0
         disp_string = [' '] * seg_len
         start = max(0, chromStart - highlightMin0)
         end = min(seg_len, chromEnd - highlightMin0)
+
         disp_string[start: end] = ['.'] * (end - start)
-        disp_m6q = []
+        disp_m6a = []
         disp_cpg = []
         disp_nuc = []
         disp_msp = []
@@ -157,7 +166,7 @@ def fibseq_bam():
                     else:
                         sort_vector.append(0.0)
                         qual_vector.append(-1)
-                        disp_m6a[refBase0 - highlightMin0] = 'o'
+                        disp_m6a[refBase0 - highlightMin0] = ','
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -168,9 +177,9 @@ def fibseq_bam():
         if not len(sort_vector):
             continue
 
-        if show_cpg:
-            ref_starts = [int(x) - chromStart for x in record['ref_m6a'].strip(',').split(',')]
-            quals = [int(x) for x in record['m6a_qual'].strip(',').split(',')]
+        if show_m5C:
+            ref_starts = [int(x) - chromStart for x in record['ref_5mC'].strip(',').split(',')]
+            quals = [int(x) for x in record['5mC_qual'].strip(',').split(',')]
             start_dicts = [{'r_pos': x, 'qual': quals[n]} for n, x in enumerate(ref_starts) if x != -1]
 
             if not start_dicts:
@@ -178,15 +187,15 @@ def fibseq_bam():
             hash_cpg = dict([(x['r_pos'], x['qual']) for x in start_dicts])
 
             disp_cpg = disp_string[:]
-            idx0 = bisect_left(refBasesAT, chromStart + 2)
-            idx1 = bisect_left(refBasesAT, chromEnd - 1)
-            for refBase0 in refBasesAT[idx0:idx1]:
+            idx0 = bisect_left(refBasesCG, chromStart + 2)
+            idx1 = bisect_left(refBasesCG, chromEnd - 1)
+            for refBase0 in refBasesCG[idx0:idx1]:
                 if refBase0 > chromStart + 1 and refBase0 < chromEnd - 1:
                     offset = refBase0 - chromStart
                     if offset in hash_cpg:  # methylated
                         disp_cpg[refBase0 - highlightMin0] = str(hash_cpg[offset] // 26)
                     else:
-                        disp_cpg[refBase0 - highlightMin0] = 'o'
+                        disp_cpg[refBase0 - highlightMin0] = ','
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -200,7 +209,7 @@ def fibseq_bam():
                 end = min(seg_len, start + ref_lens[n])
                 start = max(0, start)
                 if start < seg_len and end > 0:
-                    disp_nuc[start: end] = ['-'] * (end - start)
+                    disp_nuc[start: end] = ['n'] * (end - start)
 
         if show_msp and record['ref_msp_starts'] != '.':
             ref_starts = [int(x) - chromStart for x in record['ref_msp_starts'].strip(',').split(',')]
@@ -211,7 +220,7 @@ def fibseq_bam():
                 end = min(seg_len, start + ref_lens[n])
                 start = max(0, start)
                 if start < seg_len and end > 0:
-                    disp_msp[start: end] = ['+'] * (end - start)
+                    disp_msp[start: end] = ['m'] * (end - start)
 
         mean = np.nanmean(sort_vector)
         hash = {
@@ -238,28 +247,26 @@ def fibseq_bam():
     makedirs(outputFolder, exist_ok=True)
 
     # Matrix of the m6A statuses within excerpt region
-    fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
-    out_matrix = open(fileMatrix, 'w')
-    matrixHeader = '\t'.join(['ID', 'chrom', 'start', 'end', 'strand', 'type', referenceString]) + '\n'
-    out_matrix.write(matrixHeader)
+    file_matrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
+    out_matrix = open(file_matrix, 'w')
+    matrix_header = '\t'.join(['chrom', 'start', 'end', 'ID', 'strand', 'type', referenceString]) + '\n'
+    out_matrix.write(matrix_header)
 
     # Original m6A BED12 lines, just sorted (should I redo them with the header?)
-    fileSorted = path.join(outputFolder, 'included_m6A_bed_tracks_sorted_by_methylation.txt')
-    out_sorted = open(fileSorted, 'w')
-
-    includedHeader = '\t'.join(['ID', 'chrom', 'start', 'end', 'strand', 'type', referenceString]) + '\n'
-    out_matrix.write(matrixHeader)
+    file_sorted = path.join(outputFolder, 'included_m6A_bed_tracks_sorted_by_methylation.txt')
+    out_sorted = open(file_sorted, 'w')
+    included_header = '\t'.join(['chrom', 'start', 'end', 'ID', 'strand', 'mean_meth']) + '\n'
+    out_sorted.write(included_header)
 
     # Same order for outputs
     methsorted = sorted(hashes, key=lambda x: x.get('meanmeth'), reverse=True)
     for hashref in methsorted:
-        # print(hashref['meanmeth'])
-        out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line']])))
+        out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line'] + [hashref['meanmeth']]])))
 
         out_matrix.write(
-            '{}\t{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'], hashref['strand'],
+            '{}\t{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['chrom'], hashref['start'], hashref['end'], hashref['name'], hashref['strand'],
                                           hashref['disp_m6a']))
-        if show_cpg:
+        if show_m5C:
             out_matrix.write('\t\t\t\t\tcpg\t{}\n'.format(hashref['disp_cpg']))
         if show_nuc:
             out_matrix.write('\t\t\t\t\tnuc\t{}\n'.format(hashref['disp_nuc']))

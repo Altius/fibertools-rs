@@ -104,7 +104,7 @@ def fibseq_bam():
     show_list = ''
     if '-s' in sys.argv:
         show_list = sys.argv[sys.argv.index('-s') + 1]
-    show_cpg = True if 'cpg' in show_list else False
+    show_m5C = True if 'm5C' in show_list else False
     show_nuc = True if 'nuc' in show_list else False
     show_msp = True if 'msp' in show_list else False
 
@@ -126,7 +126,6 @@ def fibseq_bam():
         print('Expecting {} bp but read {}'.format(expectedReferenceLength, foundReferenceLength))
         exit(-1)
 
-
     # Mark the A's and T's that could get m6A calls
     if show_m6a:
         refBasesAT = []
@@ -136,8 +135,8 @@ def fibseq_bam():
         countATsInRange = len(refBasesAT)
         print('AT count in region:{}'.format(countATsInRange))
 
-    # Mark the C's and G's that could get m6A calls
-    if show_cpg:
+    # Mark the C's and G's that could get m5C calls
+    if show_m5C:
         refBasesCG = []
         for i in range(expectedReferenceLength):
             if referenceString[i].upper() in ['C', 'G']:
@@ -146,10 +145,6 @@ def fibseq_bam():
         print('CG count in region:{}'.format(countCGsInRange))
 
     hashes = []
-    disp_m6a = []
-    disp_cpg = []
-    disp_nuc = []
-    disp_msp = []
 
     ext = path.splitext(input_file)[1]
     if ext not in ['.bam']:
@@ -165,14 +160,20 @@ def fibseq_bam():
         chromStart = record.reference_start
         chromEnd = record.reference_end
         name = record.query_name
+        strand = '-' if record.is_reverse else '+'
 
-        line = [chrom, chromStart, chromEnd, name]
+        line = [chrom, chromStart, chromEnd, name, strand]
 
         seg_len = highlightMax1 - highlightMin0
         disp_string = [' '] * seg_len
         start = max(0, chromStart - highlightMin0)
         end = min(seg_len, chromEnd - highlightMin0)
+
         disp_string[start: end] = ['.'] * (end - start)
+        disp_m6a = []
+        disp_cpg = []
+        disp_nuc = []
+        disp_msp = []
 
         if show_m6a:
             keys = [x for x in record.modified_bases.keys() if 'a' in x]
@@ -200,7 +201,7 @@ def fibseq_bam():
                     else:
                         sort_vector.append(0.0)
                         qual_vector.append(-1)
-                        disp_m6a[refBase0 - highlightMin0] = 'o'
+                        disp_m6a[refBase0 - highlightMin0] = ','
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -210,7 +211,7 @@ def fibseq_bam():
         if not len(sort_vector):
             continue
 
-        if show_cpg:
+        if show_m5C:
             keys = [x for x in record.modified_bases.keys() if 'm' in x]  # cpg change to 'm'
             base_starts = []
             for key in keys:
@@ -230,7 +231,7 @@ def fibseq_bam():
                     if offset in hash_cpg:  # methylated
                         disp_cpg[refBase0 - highlightMin0] = str(hash_cpg[offset] // 26)
                     else:
-                        disp_cpg[refBase0 - highlightMin0] = 'o'
+                        disp_cpg[refBase0 - highlightMin0] = ','
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -244,34 +245,37 @@ def fibseq_bam():
         if show_nuc:
             nuc_starts = list(get_tag('ns'))
             nuc_lengths = list(get_tag('nl'))
-            if record.is_reverse:
-                nuc_ends = [x + nuc_lengths[n] for n, x in enumerate(nuc_starts)]
-                nuc_starts = [seg_len - x - 1 for x in reversed(nuc_ends)]
-                nuc_lengths.reverse()
+            if nuc_starts:
+                disp_nuc = disp_string[:]
+                if record.is_reverse:
+                    nuc_ends = [x + nuc_lengths[n] for n, x in enumerate(nuc_starts)]
+                    nuc_starts = [record.qlen - x - 1 for x in reversed(nuc_ends)]
+                    nuc_lengths.reverse()
 
-            disp_nuc = disp_string[:]
-            for n, x in enumerate(nuc_starts):
-                start = chromStart - highlightMin0 + x
-                end = min(seg_len, start + nuc_lengths[n])
-                start = max(0, start)
-                if start < seg_len and end > 0:
-                    disp_nuc[start: end] = ['-'] * (end - start)
+
+                for n, x in enumerate(nuc_starts):
+                    start = chromStart - highlightMin0 + x
+                    end = min(seg_len, start + nuc_lengths[n])
+                    start = max(0, start)
+                    if start < seg_len and end > 0:
+                        disp_nuc[start: end] = ['n'] * (end - start)
 
         if show_msp:
             msp_starts = list(get_tag('as'))
             msp_lengths = list(get_tag('al'))
-            if record.is_reverse:
-                msp_ends = [x + msp_lengths[n] for n, x in enumerate(msp_starts)]
-                msp_starts = [seg_len - x - 1 for x in reversed(msp_ends)]
-                msp_lengths.reverse()
+            if msp_starts:
+                if record.is_reverse:
+                    msp_ends = [x + msp_lengths[n] for n, x in enumerate(msp_starts)]
+                    msp_starts = [record.qlen - x - 1 for x in reversed(msp_ends)]
+                    msp_lengths.reverse()
 
-            disp_msp = disp_string[:]
-            for n, x in enumerate(msp_starts):
-                start = chromStart - highlightMin0 + x
-                end = min(seg_len, start + msp_lengths[n])
-                start = max(0, start)
-                if start < seg_len and end > 0:
-                    disp_msp[start: end] = ['+'] * (end - start)
+                disp_msp = disp_string[:]
+                for n, x in enumerate(msp_starts):
+                    start = chromStart - highlightMin0 + x
+                    end = min(seg_len, start + msp_lengths[n])
+                    start = max(0, start)
+                    if start < seg_len and end > 0:
+                        disp_msp[start: end] = ['m'] * (end - start)
 
         mean = np.nanmean(sort_vector)
         hash = {
@@ -285,6 +289,7 @@ def fibseq_bam():
             'disp_msp': ''.join(disp_msp),
             'start': chromStart,
             'end': chromEnd,
+            'strand': strand,
             'inputorder': cnt + 1,
             'meanmeth': mean
         }
@@ -297,30 +302,31 @@ def fibseq_bam():
     makedirs(outputFolder, exist_ok=True)
 
     # Matrix of the m6A statuses within excerpt region
-    fileMatrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
-    out_matrix = open(fileMatrix, 'w')
-    matrixHeader = '\t'.join(['ID', 'chrom', 'start', 'end', 'type', referenceString]) + '\n'
-    out_matrix.write(matrixHeader)
+    file_matrix = path.join(outputFolder, 'matrix_{}_{}_{}.tsv'.format(chromosome, highlightMin0, highlightMax1))
+    out_matrix = open(file_matrix, 'w')
+    matrix_header = '\t'.join(['chrom', 'start', 'end', 'ID', 'strand', 'type', referenceString]) + '\n'
+    out_matrix.write(matrix_header)
 
     # Original m6A BED12 lines, just sorted (should I redo them with the header?)
-    fileSorted = path.join(outputFolder, 'included_m6A_bed_tracks_sorted_by_methylation.txt')
-    out_sorted = open(fileSorted, 'w')
+    file_sorted = path.join(outputFolder, 'included_m6A_bed_tracks_sorted_by_methylation.txt')
+    out_sorted = open(file_sorted, 'w')
+    included_header = '\t'.join(['chrom', 'start', 'end', 'ID', 'strand', 'mean_meth']) + '\n'
+    out_sorted.write(included_header)
 
     # Same order for outputs
     methsorted = sorted(hashes, key=lambda x: x.get('meanmeth'), reverse=True)
     for hashref in methsorted:
-        # print(hashref['meanmeth'])
-        out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line']])))
+        out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line'] + [hashref['meanmeth']]])))
 
         out_matrix.write(
-            '{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'],
+            '{}\t{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'], hashref['strand'],
                                           hashref['disp_m6a']))
-        if show_cpg:
-            out_matrix.write('\t\t\t\tcpg\t{}\n'.format(hashref['disp_cpg']))
+        if show_m5C:
+            out_matrix.write('\t\t\t\t\tcpg\t{}\n'.format(hashref['disp_cpg']))
         if show_nuc:
-            out_matrix.write('\t\t\t\tnuc\t{}\n'.format(hashref['disp_nuc']))
+            out_matrix.write('\t\t\t\t\tnuc\t{}\n'.format(hashref['disp_nuc']))
         if show_msp:
-            out_matrix.write('\t\t\t\tmsp\t{}\n'.format(hashref['disp_msp']))
+            out_matrix.write('\t\t\t\t\tmsp\t{}\n'.format(hashref['disp_msp']))
 
     print('Record count (min, max): {} ({}, {})'.format(len(methsorted),
                                 methsorted[-1]['meanmeth'] if len(methsorted) else 0.0,
