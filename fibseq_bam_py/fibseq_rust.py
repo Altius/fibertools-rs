@@ -108,8 +108,8 @@ def fibseq_bam():
     # starts_bed = [int(x) for x in blockStarts.strip(',').split(',')[1:-1]]
     # temp = [x for x in m6a_starts if x not in starts_bed]
 
-    # exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
     exe_path = '/net/photo/photo1/Keith/ft'
+    exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
     command_line = '{} extract {} --region {} -a stdout -s -r'.format(exe_path, input_file, region1)
     output = subprocess.getoutput(command_line)
     output = output[output.index('#ct'):]  # strip warnings
@@ -246,6 +246,9 @@ def fibseq_bam():
     # Original m6A BED12 lines, just sorted (should I redo them with the header?)
     fileSorted = path.join(outputFolder, 'included_m6A_bed_tracks_sorted_by_methylation.txt')
     out_sorted = open(fileSorted, 'w')
+
+    includedHeader = '\t'.join(['ID', 'chrom', 'start', 'end', 'strand', 'type', referenceString]) + '\n'
+    out_matrix.write(matrixHeader)
 
     # Same order for outputs
     methsorted = sorted(hashes, key=lambda x: x.get('meanmeth'), reverse=True)

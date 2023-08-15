@@ -8,7 +8,6 @@ import subprocess
 
 import pysam
 import numpy as np
-# import decode_m6A_events
 from bisect import bisect_left
 
 
@@ -31,9 +30,9 @@ fa_file = '/Volumes/photo2/fiberseq_data/hg38/hg38.fa'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_10Mbp_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:40000000-50000000'
 # input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bed.gz'
-input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
+# input_file = '/Volumes/photo2/fiberseq_data/chrX_100Kb_resdir_bed.aligned.m6a.bam'
 # region = 'chrX:49200000-49300000'
-region = 'chrX:49202000-49203000'
+# region = 'chrX:49202000-49203000'
 
 
 def fibseq_bam():
@@ -179,14 +178,16 @@ def fibseq_bam():
         if compact_output:
             full_line = ['_'] * len(refBasesAT)
             full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else '1' for x in hashref['vector']]
-            # full_line[hashref['idx0']:hashref['idx1']] = ['.' if not x else str(randint(1,9)) for x in hashref['vector']]
             out_matrix.write('{}\t{}\t{}\t{}\t{}\n'.format(hashref['chrom'], hashref['start'], hashref['end'], hashref['name'], ''.join(full_line)))
         else:
             full_line = [float('nan')] * len(refBasesAT)
-            full_line[idx0:idx1] = hashref['vector']
+            full_line[hashref['idx0']:hashref['idx1']] = hashref['vector']
             out_matrix.write('{}\t{}\n'.format(hashref['name'], '\t'.join([str(x) for x in full_line])))
 
-    print('Record count (min, max): {} ({}, {})'.format(len(methsorted), methsorted[-1]['meanmeth'], methsorted[0]['meanmeth']))
+    if methsorted:
+        print('Record count (min, max): {} ({}, {})'.format(len(methsorted), methsorted[-1]['meanmeth'], methsorted[0]['meanmeth']))
+    else:
+        print('No records processed')
 
     out_sorted.close()
     out_matrix.close()

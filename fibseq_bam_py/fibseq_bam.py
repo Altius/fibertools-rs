@@ -242,12 +242,11 @@ def fibseq_bam():
                 return None
 
         if show_nuc:
-            seq_len = record.qlen
             nuc_starts = list(get_tag('ns'))
             nuc_lengths = list(get_tag('nl'))
             if record.is_reverse:
                 nuc_ends = [x + nuc_lengths[n] for n, x in enumerate(nuc_starts)]
-                nuc_starts = [seq_len - x - 1 for x in reversed(nuc_ends)]
+                nuc_starts = [seg_len - x - 1 for x in reversed(nuc_ends)]
                 nuc_lengths.reverse()
 
             disp_nuc = disp_string[:]
