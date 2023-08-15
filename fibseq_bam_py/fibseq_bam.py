@@ -12,6 +12,16 @@ from bisect import bisect_left
 import re
 
 
+DEBUG = False
+debugVerbose = False  # set to catch bad reads
+
+# symbol representation
+nucSymbol = 'n'       # '-'
+mspSymbol = 'm'       # '+'
+irrelSymbol = '.'     # '.'
+emptySymbol = ' '     # ' '
+unmarkedSymbol = ','  # 'o'
+
 input_file = None
 region = None
 outputFolder = './output'
@@ -165,11 +175,11 @@ def fibseq_bam():
         line = [chrom, chromStart, chromEnd, name, strand]
 
         seg_len = highlightMax1 - highlightMin0
-        disp_string = [' '] * seg_len
+        disp_string = [emptySymbol] * seg_len
         start = max(0, chromStart - highlightMin0)
         end = min(seg_len, chromEnd - highlightMin0)
 
-        disp_string[start: end] = ['.'] * (end - start)
+        disp_string[start: end] = [irrelSymbol] * (end - start)
         disp_m6a = []
         disp_cpg = []
         disp_nuc = []
@@ -201,7 +211,7 @@ def fibseq_bam():
                     else:
                         sort_vector.append(0.0)
                         qual_vector.append(-1)
-                        disp_m6a[refBase0 - highlightMin0] = ','
+                        disp_m6a[refBase0 - highlightMin0] = unmarkedSymbol
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -231,7 +241,7 @@ def fibseq_bam():
                     if offset in hash_cpg:  # methylated
                         disp_cpg[refBase0 - highlightMin0] = str(hash_cpg[offset] // 26)
                     else:
-                        disp_cpg[refBase0 - highlightMin0] = ','
+                        disp_cpg[refBase0 - highlightMin0] = unmarkedSymbol
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -258,7 +268,7 @@ def fibseq_bam():
                     end = min(seg_len, start + nuc_lengths[n])
                     start = max(0, start)
                     if start < seg_len and end > 0:
-                        disp_nuc[start: end] = ['n'] * (end - start)
+                        disp_nuc[start: end] = [nucSymbol] * (end - start)
 
         if show_msp:
             msp_starts = list(get_tag('as'))
@@ -275,7 +285,7 @@ def fibseq_bam():
                     end = min(seg_len, start + msp_lengths[n])
                     start = max(0, start)
                     if start < seg_len and end > 0:
-                        disp_msp[start: end] = ['m'] * (end - start)
+                        disp_msp[start: end] = [mspSymbol] * (end - start)
 
         mean = np.nanmean(sort_vector)
         hash = {
