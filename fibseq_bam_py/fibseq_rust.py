@@ -314,6 +314,7 @@ def fibseq_bam():
     m5C_bins = np.histogram(m5C_vals, 10, (0, 255))
     print('m5C bins {}'.format(m5C_bins[0]))
 
+    print('Completed : {:.1f} sec'.format((timer() - start_time)))
 
 if __name__ == '__main__':
     fibseq_bam()
