@@ -128,7 +128,7 @@ def fibseq_bam():
     # temp = [x for x in m6a_starts if x not in starts_bed]
 
     exe_path = '/net/photo/photo1/Keith/ft'
-    # exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
+    exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
     command_line = '{} extract {} --region {} -a stdout -s -r'.format(exe_path, input_file, region1)
     output = subprocess.getoutput(command_line)
     output = output[output.index('#ct'):]  # strip warnings
@@ -144,7 +144,7 @@ def fibseq_bam():
 
         sort_vector = []
         m6A_qual_vector = []
-        if show_m6A:
+        if show_m6A and record['ref_m6a'] != '.':
             ref_starts = [int(x) - chromStart for x in record['ref_m6a'].strip(',').split(',')]
             quals = [int(x) for x in record['m6a_qual'].strip(',').split(',')]
             start_dicts = [{'r_pos': x, 'qual': quals[n]} for n, x in enumerate(ref_starts) if x != -1]
@@ -176,7 +176,7 @@ def fibseq_bam():
             continue
 
         m5C_qual_vector = []
-        if show_m5C:
+        if show_m5C and record['ref_5mC'] != '.':
             ref_starts = [int(x) - chromStart for x in record['ref_5mC'].strip(',').split(',')]
             quals = [int(x) for x in record['5mC_qual'].strip(',').split(',')]
             start_dicts = [{'r_pos': x, 'qual': quals[n]} for n, x in enumerate(ref_starts) if x != -1]
@@ -302,17 +302,18 @@ def fibseq_bam():
 
     print('Completed : {:.1f} min'.format((timer() - start_time) / 60))
 
-    m6A_vals = np.array([x for x in hashref['qual_m6A'] for hashref in methsorted])
-    m6A_vals = m6A_vals[~np.isnan(m6A_vals)]  # remove placeholder nan's
-    m6A_vals = m6A_vals[~(m6A_vals == -1)]    # remove unmethylated
-    m6a_bins = np.histogram(m6A_vals, 10, (0, 255))
-    print('m6A bins {}'.format(m6a_bins[0]))
+    if methsorted:
+        m6A_vals = np.array([x for x in hashref['qual_m6A'] for hashref in methsorted])
+        m6A_vals = m6A_vals[~np.isnan(m6A_vals)]  # remove placeholder nan's
+        m6A_vals = m6A_vals[~(m6A_vals == -1)]    # remove unmethylated
+        m6a_bins = np.histogram(m6A_vals, 10, (0, 255))
+        print('m6A bins {}'.format(m6a_bins[0]))
 
-    m5C_vals = np.array([x for x in hashref['qual_m5C'] for hashref in methsorted])
-    m5C_vals = m5C_vals[~np.isnan(m5C_vals)]
-    m5C_vals = m5C_vals[~(m5C_vals == -1)]
-    m5C_bins = np.histogram(m5C_vals, 10, (0, 255))
-    print('m5C bins {}'.format(m5C_bins[0]))
+        m5C_vals = np.array([x for x in hashref['qual_m5C'] for hashref in methsorted])
+        m5C_vals = m5C_vals[~np.isnan(m5C_vals)]
+        m5C_vals = m5C_vals[~(m5C_vals == -1)]
+        m5C_bins = np.histogram(m5C_vals, 10, (0, 255))
+        print('m5C bins {}'.format(m5C_bins[0]))
 
     print('Completed : {:.1f} sec'.format((timer() - start_time)))
 
