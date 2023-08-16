@@ -354,18 +354,17 @@ def fibseq_bam():
     out_sorted.close()
     out_matrix.close()
 
+    # check out the binning of the qual values
     if methsorted:
-        m6A_vals = np.array([x for x in hashref['qual_m6A'] for hashref in methsorted])
-        m6A_vals = m6A_vals[~np.isnan(m6A_vals)]  # remove placeholder nan's
-        m6A_vals = m6A_vals[~(m6A_vals == -1)]    # remove unmethylated
-        m6a_bins = np.histogram(m6A_vals, 10, (0, 255))
-        print('m6A bins {}'.format(m6a_bins[0]))
-
-        m5C_vals = np.array([x for x in hashref['qual_m5C'] for hashref in methsorted])
-        m5C_vals = m5C_vals[~np.isnan(m5C_vals)]
-        m5C_vals = m5C_vals[~(m5C_vals == -1)]
-        m5C_bins = np.histogram(m5C_vals, 10, (0, 255))
-        print('m5C bins {}'.format(m5C_bins[0]))
+        for key in ['qual_m6A', 'qual_m5C']:
+            _vals = []
+            for hashref in methsorted:
+                _vals.extend([x for x in hashref[key]])
+            _vals = np.array(_vals)
+            _vals = _vals[~np.isnan(_vals)]  # remove placeholder nan's
+            _vals = _vals[~(_vals == -1)]    # remove unmethylated
+            _bins = np.histogram(_vals, 10, (0, 255))
+            print('{} bins {}'.format(key, _bins[0]))
 
     print('Completed : {:.1f} sec'.format((timer() - start_time)))
 
