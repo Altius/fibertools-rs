@@ -20,7 +20,7 @@ nucSymbol = 'n'       # '-'
 mspSymbol = 'm'       # '+'
 irrelSymbol = '.'     # '.'
 emptySymbol = ' '     # ' '
-unmarkedSymbol = ','  # 'o'
+unmarkedSymbol = '_'  # 'o'
 
 input_file = None
 region = None
@@ -95,9 +95,9 @@ def fibseq_bam():
 
     if len(sys.argv) < 3:
         py_file = path.basename(sys.argv[0])
-        print('Usage:\tpython {} input_file region [-o output_folder] [-f fa_file] [-s cpg,nuc,msp]'.format(py_file))
+        print('Usage:\tpython {} input_file region [-o output_folder] [-f fa_file] [-s m6A,M5C,nuc,msp]'.format(py_file))
         print('      \t input file can be indexed .bed.gz or indexed .bam')
-        print('      \t e.g. python {} chrX_100Kb_resdir_bed.aligned.m6a.bam chrX:49002000-49003000 -s cpg,nuc'.format(py_file))
+        print('      \t e.g. python {} chrX_100Kb_resdir_bed.aligned.m6a.bam chrX:49002000-49003000 -s M6A,M5C,nuc'.format(py_file))
         print('      \t   runs m6a output over the region specified and also shows cpg and nuc data')
         exit(0)
 
@@ -110,10 +110,10 @@ def fibseq_bam():
     if '-f' in sys.argv:
         fa_file = sys.argv[sys.argv.index('-f') + 1]
 
-    show_m6a = True  # always on for now
-    show_list = ''
+    show_list = 'm6A,m5C,nuc,msp'
     if '-s' in sys.argv:
         show_list = sys.argv[sys.argv.index('-s') + 1]
+    show_m6A = True  # always on
     show_m5C = True if 'm5C' in show_list else False
     show_nuc = True if 'nuc' in show_list else False
     show_msp = True if 'msp' in show_list else False
@@ -137,7 +137,7 @@ def fibseq_bam():
         exit(-1)
 
     # Mark the A's and T's that could get m6A calls
-    if show_m6a:
+    if show_m6A:
         refBasesAT = []
         for i in range(expectedReferenceLength):
             if referenceString[i].upper() in ['A', 'T']:
@@ -155,6 +155,7 @@ def fibseq_bam():
         print('CG count in region:{}'.format(countCGsInRange))
 
     hashes = []
+    seg_len = highlightMax1 - highlightMin0
 
     ext = path.splitext(input_file)[1]
     if ext not in ['.bam']:
@@ -171,21 +172,12 @@ def fibseq_bam():
         chromEnd = record.reference_end
         name = record.query_name
         strand = '-' if record.is_reverse else '+'
-
+        seq_qlen = record.qlen
         line = [chrom, chromStart, chromEnd, name, strand]
 
-        seg_len = highlightMax1 - highlightMin0
-        disp_string = [emptySymbol] * seg_len
-        start = max(0, chromStart - highlightMin0)
-        end = min(seg_len, chromEnd - highlightMin0)
-
-        disp_string[start: end] = [irrelSymbol] * (end - start)
-        disp_m6a = []
-        disp_cpg = []
-        disp_nuc = []
-        disp_msp = []
-
-        if show_m6a:
+        sort_vector = []
+        m6A_qual_vector = []
+        if show_m6A:
             keys = [x for x in record.modified_bases.keys() if 'a' in x]
             base_starts = []
             for key in keys:
@@ -194,9 +186,7 @@ def fibseq_bam():
             starts = realign_pos(record.aligned_pairs, sorted_starts)
             hash_m6A = dict([(x['r_pos'] - chromStart, x['qual']) for x in starts])
 
-            sort_vector = []
-            qual_vector = []
-            disp_m6a = disp_string[:]
+            m6A_qual_vector = [float('nan')] * seg_len
             idx0 = bisect_left(refBasesAT, chromStart + 2)
             idx1 = bisect_left(refBasesAT, chromEnd - 1)
             for refBase0 in refBasesAT[idx0:idx1]:
@@ -206,12 +196,10 @@ def fibseq_bam():
                     offset = refBase0 - chromStart
                     if offset in hash_m6A:  # methylated
                         sort_vector.append(1.0)
-                        qual_vector.append(hash_m6A[offset])
-                        disp_m6a[refBase0 - highlightMin0] = str(hash_m6A[offset] // 26)
+                        m6A_qual_vector[refBase0 - highlightMin0] = float(hash_m6A[offset])
                     else:
                         sort_vector.append(0.0)
-                        qual_vector.append(-1)
-                        disp_m6a[refBase0 - highlightMin0] = unmarkedSymbol
+                        m6A_qual_vector[refBase0 - highlightMin0] = -1.0
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -221,6 +209,7 @@ def fibseq_bam():
         if not len(sort_vector):
             continue
 
+        m5C_qual_vector = []
         if show_m5C:
             keys = [x for x in record.modified_bases.keys() if 'm' in x]  # cpg change to 'm'
             base_starts = []
@@ -228,9 +217,9 @@ def fibseq_bam():
                 base_starts += [{'q_pos': x, 'qual': v} for x, v in record.modified_bases[key]]
             sorted_starts = sorted(base_starts, key=lambda x: x['q_pos'])
             starts = realign_pos(record.aligned_pairs, sorted_starts)
-            hash_cpg = dict([(x['r_pos'] - chromStart, x['qual']) for x in starts])
+            hash_m5C = dict([(x['r_pos'] - chromStart, x['qual']) for x in starts])
 
-            disp_cpg = disp_string[:]
+            m5C_qual_vector = [float('nan')] * seg_len
             idx0 = bisect_left(refBasesCG, chromStart + 2)
             idx1 = bisect_left(refBasesCG, chromEnd - 1)
             for refBase0 in refBasesCG[idx0:idx1]:
@@ -238,10 +227,10 @@ def fibseq_bam():
                 # double check that ignoring the BED12 end positions that aren't considered in the track
                 if refBase0 > chromStart + 1 and refBase0 < chromEnd - 1:
                     offset = refBase0 - chromStart
-                    if offset in hash_cpg:  # methylated
-                        disp_cpg[refBase0 - highlightMin0] = str(hash_cpg[offset] // 26)
+                    if offset in hash_m5C:  # methylated
+                        m5C_qual_vector[refBase0 - highlightMin0] = float(hash_m5C[offset])
                     else:
-                        disp_cpg[refBase0 - highlightMin0] = unmarkedSymbol
+                        m5C_qual_vector[refBase0 - highlightMin0] = -1.0
                 else:
                     # Will include with NA's for missing extent out of range for this molecule, incomplete overlap
                     print('should not get here')
@@ -252,40 +241,26 @@ def fibseq_bam():
             except:
                 return None
 
+        nuc_starts = []
+        nuc_lengths = []
         if show_nuc:
             nuc_starts = list(get_tag('ns'))
             nuc_lengths = list(get_tag('nl'))
-            if nuc_starts:
-                disp_nuc = disp_string[:]
-                if record.is_reverse:
-                    nuc_ends = [x + nuc_lengths[n] for n, x in enumerate(nuc_starts)]
-                    nuc_starts = [record.qlen - x - 1 for x in reversed(nuc_ends)]
-                    nuc_lengths.reverse()
+            if record.is_reverse:
+                nuc_ends = [x + nuc_lengths[n] for n, x in enumerate(nuc_starts)]
+                nuc_starts = [seq_qlen - x - 1 for x in reversed(nuc_ends)]
+                nuc_lengths.reverse()
 
-
-                for n, x in enumerate(nuc_starts):
-                    start = chromStart - highlightMin0 + x
-                    end = min(seg_len, start + nuc_lengths[n])
-                    start = max(0, start)
-                    if start < seg_len and end > 0:
-                        disp_nuc[start: end] = [nucSymbol] * (end - start)
-
+        msp_starts = []
+        msp_lengths = []
         if show_msp:
             msp_starts = list(get_tag('as'))
             msp_lengths = list(get_tag('al'))
             if msp_starts:
                 if record.is_reverse:
                     msp_ends = [x + msp_lengths[n] for n, x in enumerate(msp_starts)]
-                    msp_starts = [record.qlen - x - 1 for x in reversed(msp_ends)]
+                    msp_starts = [seq_qlen - x - 1 for x in reversed(msp_ends)]
                     msp_lengths.reverse()
-
-                disp_msp = disp_string[:]
-                for n, x in enumerate(msp_starts):
-                    start = chromStart - highlightMin0 + x
-                    end = min(seg_len, start + msp_lengths[n])
-                    start = max(0, start)
-                    if start < seg_len and end > 0:
-                        disp_msp[start: end] = [mspSymbol] * (end - start)
 
         mean = np.nanmean(sort_vector)
         hash = {
@@ -293,17 +268,18 @@ def fibseq_bam():
             'name': name,
             'line': line,
             'vector': sort_vector,
-            'disp_m6a': ''.join(disp_m6a),
-            'disp_cpg': ''.join(disp_cpg),
-            'disp_nuc': ''.join(disp_nuc),
-            'disp_msp': ''.join(disp_msp),
+            'qual_m6A': m6A_qual_vector,
+            'qual_m5C': m5C_qual_vector,
+            'nuc_starts': nuc_starts,
+            'nuc_lens': nuc_lengths,
+            'msp_starts': msp_starts,
+            'msp_lens': msp_lengths,
             'start': chromStart,
             'end': chromEnd,
             'strand': strand,
             'inputorder': cnt + 1,
             'meanmeth': mean
         }
-        # print(hash)
 
         hashes.append(hash)
 
@@ -323,20 +299,53 @@ def fibseq_bam():
     included_header = '\t'.join(['chrom', 'start', 'end', 'ID', 'strand', 'mean_meth']) + '\n'
     out_sorted.write(included_header)
 
-    # Same order for outputs
+    # Save out the reports
     methsorted = sorted(hashes, key=lambda x: x.get('meanmeth'), reverse=True)
     for hashref in methsorted:
         out_sorted.write('{}\n'.format('\t'.join([str(x) for x in hashref['line'] + [hashref['meanmeth']]])))
 
         out_matrix.write(
-            '{}\t{}\t{}\t{}\t{}\tm6a\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'], hashref['strand'],
-                                          hashref['disp_m6a']))
+            '{}\t{}\t{}\t{}\t{}\n'.format(hashref['name'], hashref['chrom'], hashref['start'], hashref['end'], hashref['strand']))
+
+        chromStart = hashref['start']
+        chromEnd = hashref['end']
+        disp_string = [emptySymbol] * seg_len
+        start = max(0, chromStart - highlightMin0)
+        end = min(seg_len, chromEnd - highlightMin0)
+        disp_string[start: end] = [irrelSymbol] * (end - start)
+
+        def update_qual_string(qual_vector):
+            my_disp = disp_string[:]
+            for n, v in enumerate(qual_vector):
+                if not np.isnan(v):
+                    if v == -1.0:
+                        my_disp[n] = unmarkedSymbol
+                    else:
+                        my_disp[n] = str(int(v) // 26)
+            return ''.join(my_disp)
+
+        def update_nuc_msp_string(ref_starts, ref_lens, symbol):
+            my_disp = disp_string[:]
+            for n, x in enumerate(ref_starts):
+                start = chromStart - highlightMin0 + x
+                end = min(seg_len, start + ref_lens[n])
+                start = max(0, start)
+                if start < seg_len and end > 0:
+                    my_disp[start: end] = [symbol] * (end - start)
+            return ''.join(my_disp)
+
+        if show_m6A:
+            m6A_disp = update_qual_string(hashref['qual_m6A'])
+            out_matrix.write('\t\t\t\t\tm6A\t{}\n'.format(m6A_disp))
         if show_m5C:
-            out_matrix.write('\t\t\t\t\tcpg\t{}\n'.format(hashref['disp_cpg']))
+            m5C_disp = update_qual_string(hashref['qual_m5C'])
+            out_matrix.write('\t\t\t\t\tm5C\t{}\n'.format(m5C_disp))
         if show_nuc:
-            out_matrix.write('\t\t\t\t\tnuc\t{}\n'.format(hashref['disp_nuc']))
+            nuc_disp = update_nuc_msp_string(hashref['nuc_starts'], hashref['nuc_lens'], nucSymbol)
+            out_matrix.write('\t\t\t\t\tnuc\t{}\n'.format(nuc_disp))
         if show_msp:
-            out_matrix.write('\t\t\t\t\tmsp\t{}\n'.format(hashref['disp_msp']))
+            msp_disp = update_nuc_msp_string(hashref['msp_starts'], hashref['msp_lens'], mspSymbol)
+            out_matrix.write('\t\t\t\t\tmsp\t{}\n'.format(msp_disp))
 
     print('Record count (min, max): {} ({}, {})'.format(len(methsorted),
                                 methsorted[-1]['meanmeth'] if len(methsorted) else 0.0,
