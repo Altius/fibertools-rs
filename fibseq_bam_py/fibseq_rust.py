@@ -129,7 +129,7 @@ def fibseq_bam():
 
     exe_path = '/net/photo/photo1/Keith/ft'
     # exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
-    command_line = '{} extract {} --region {} -a stdout -s -r'.format(exe_path, input_file, region1)
+    command_line = '{} extract {} --region {} -m 0 -a stdout -s -r'.format(exe_path, input_file, region1)
     output = subprocess.getoutput(command_line)
     records = []
     if output.index('#ct') != -1:
