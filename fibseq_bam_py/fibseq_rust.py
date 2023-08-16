@@ -302,7 +302,8 @@ def fibseq_bam():
                                 methsorted[-1]['meanmeth'] if len(methsorted) else 0.0,
                                 methsorted[0]['meanmeth'] if len(methsorted) else 0.0))
 
-    print('Completed : {:.1f} min'.format((timer() - start_time) / 60))
+    out_sorted.close()
+    out_matrix.close()
 
     if methsorted:
         m6A_vals = np.array([x for x in hashref['qual_m6A'] for hashref in methsorted])
