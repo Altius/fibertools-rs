@@ -302,5 +302,18 @@ def fibseq_bam():
 
     print('Completed : {:.1f} min'.format((timer() - start_time) / 60))
 
+    m6A_vals = np.array([x for x in hashref['qual_m6A'] for hashref in methsorted])
+    m6A_vals = m6A_vals[~np.isnan(m6A_vals)]  # remove placeholder nan's
+    m6A_vals = m6A_vals[~(m6A_vals == -1)]    # remove unmethylated
+    m6a_bins = np.histogram(m6A_vals, 10, (0, 255))
+    print('m6A bins {}'.format(m6a_bins[0]))
+
+    m5C_vals = np.array([x for x in hashref['qual_m5C'] for hashref in methsorted])
+    m5C_vals = m5C_vals[~np.isnan(m5C_vals)]
+    m5C_vals = m5C_vals[~(m5C_vals == -1)]
+    m5C_bins = np.histogram(m5C_vals, 10, (0, 255))
+    print('m5C bins {}'.format(m5C_bins[0]))
+
+
 if __name__ == '__main__':
     fibseq_bam()
