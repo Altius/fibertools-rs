@@ -114,7 +114,7 @@ def fibseq_bam():
     hashes = []
     seg_len = highlightMax1 - highlightMin0
 
-    records = []
+
     ext = path.splitext(input_file)[1]
     if ext not in ['.bam']:
         print('Invalid input file')
@@ -128,12 +128,14 @@ def fibseq_bam():
     # temp = [x for x in m6a_starts if x not in starts_bed]
 
     exe_path = '/net/photo/photo1/Keith/ft'
-    exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
+    # exe_path = '/Users/kgrochow/dev/fibertools-rs/target/debug/ft'
     command_line = '{} extract {} --region {} -a stdout -s -r'.format(exe_path, input_file, region1)
     output = subprocess.getoutput(command_line)
-    output = output[output.index('#ct'):]  # strip warnings
-    lines = [x.split('\t') for x in output[:-1].split('\n')]
-    records = [dict(zip(lines[0], x)) for x in lines[1:]]
+    records = []
+    if output.index('#ct') != -1:
+        output = output[output.index('#ct'):]  # strip warnings
+        lines = [x.split('\t') for x in output[:-1].split('\n')]
+        records = [dict(zip(lines[0], x)) for x in lines[1:]]
     for cnt, record in enumerate(records):
         chrom = record['#ct']
         chromStart = int(record['st'])
