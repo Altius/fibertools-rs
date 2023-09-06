@@ -7,7 +7,6 @@ from timeit import default_timer as timer
 
 import pysam
 import numpy as np
-# import decode_m6A_events
 from bisect import bisect_left
 import re
 

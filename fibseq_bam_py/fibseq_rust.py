@@ -8,7 +8,6 @@ import subprocess
 
 import pysam
 import numpy as np
-# import decode_m6A_events
 from bisect import bisect_left
 
 
