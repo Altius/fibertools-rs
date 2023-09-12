@@ -5,5 +5,5 @@
 #SBATCH --get-user-env
 
   echo slurm node: $SLURMD_NODENAME , jobid: $SLURM_JOB_ID
-  module load ft
+  module load fiberseq-rs
   python fibseq_rust.py $1 $2
